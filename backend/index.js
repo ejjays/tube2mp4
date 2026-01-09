@@ -64,8 +64,16 @@ app.get('/convert', async (req, res) => {
     try {
         if (clientId) sendEvent(clientId, { status: 'fetching_info', progress: 0 });
 
+        const cookiesPath = path.join(__dirname, 'cookies.txt');
+        const cookieArgs = fs.existsSync(cookiesPath) ? ['--cookies', cookiesPath] : [];
+
         // Step 1: Get Video Metadata
-        const infoProcess = spawn('yt-dlp', ['--dump-json', '--no-playlist', videoURL]);
+        const infoProcess = spawn('yt-dlp', [
+            ...cookieArgs,
+            '--dump-json', 
+            '--no-playlist', 
+            videoURL
+        ]);
         
         let infoData = '';
         let infoError = '';
@@ -95,10 +103,8 @@ app.get('/convert', async (req, res) => {
                 if (clientId) sendEvent(clientId, { status: 'downloading', progress: 0, title });
 
                 // Step 2: Download & Merge on Server Side
-                // We download to a temp file to ensure 'merging' completes successfully 
-                // BEFORE sending it to the client. This guarantees a valid MP4 file.
-                // We use 'bestvideo+bestaudio' to get 4K/Max Quality.
                 const args = [
+                    ...cookieArgs,
                     '-f', 'bestvideo+bestaudio/best',
                     '--merge-output-format', 'mp4',
                     '--no-playlist',
