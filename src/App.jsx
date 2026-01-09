@@ -34,8 +34,9 @@ function App() {
     setStatus('initializing');
     setVideoTitle('');
 
-    const clientId = Math.random().toString(36).substring(7);
-    const eventSource = new EventSource(`http://localhost:5000/events?id=${clientId}`);
+    const clientId = Date.now().toString();
+    const BACKEND_URL = 'https://ej-nexstream.onrender.com';
+    const eventSource = new EventSource(`${BACKEND_URL}/events?id=${clientId}`);
     
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -51,7 +52,7 @@ function App() {
     };
 
     try {
-      const response = await fetch(`http://localhost:5000/convert?url=${encodeURIComponent(url)}&id=${clientId}`);
+      const response = await fetch(`${BACKEND_URL}/convert?url=${encodeURIComponent(url)}&id=${clientId}`);
       
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));

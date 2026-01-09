@@ -7,8 +7,16 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type']
+}));
 app.use(express.json());
+
+app.get('/', (req, res) => {
+    res.send('YouTube to MP4 Backend is running!');
+});
 
 // Ensure temp directory exists
 const TEMP_DIR = path.join(__dirname, 'temp');
