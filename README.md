@@ -1,6 +1,6 @@
 # 🚀 NexStream
 
-***Tired of converters filled with ads and paywalls for high-resolution video? NexStream is a free, open-source alternative built for speed, quality, and a premium experience without any cost.***
+**Tired of converters filled with ads and paywalls for high-resolution video? NexStream is a free, open-source alternative built for speed, quality, and a premium experience without any cost.**
 
 ---
 
@@ -47,16 +47,23 @@ Most online link to video converters today are cluttered with intrusive ads and 
 
 ### Installation
 
-### 1. Setup the Backend
+### 1. Clone the Repository
+```bash
+git clone https://github.com/ejjays/nexstream.git
+cd nexstream
+```
+
+### 2. Setup the Backend
 ```bash
 cd backend
 npm install
 npm start
 ```
 
-### 2. Setup the Frontend
+### 3. Setup the Frontend
 ```bash
-# In the root directory
+# In the root directory (back from backend folder)
+cd ..
 npm install
 npm run dev
 ```
