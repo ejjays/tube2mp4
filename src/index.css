@@ -1,11 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
 @import "tailwindcss";
 
 :root {
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "IBM Plex Mono", monospace;
 }
 
+/*:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+}*/
+
 body {
-  @apply bg-[#030014] text-white min-h-screen flex justify-center items-center overflow-x-hidden m-0 p-0;
+  @apply bg-[#030014] text-white min-h-screen flex flex-col justify-start items-center overflow-x-hidden m-0 p-0;
 }
 
 @layer utilities {
@@ -15,6 +20,9 @@ body {
   
   .animate-shimmer {
     animation: shimmer 1.5s infinite;
+  }
+  .btns {
+    @apply flex items-center gap-2 text-black font-semibold py-2 justify-center flex-1 px-1 text-sm md:text-base;
   }
 }
 
