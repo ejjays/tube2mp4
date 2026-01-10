@@ -1,6 +1,6 @@
 import React from 'react';
 
-const GlowButton = ({ text = "glow button", onClick }) => {
+const GlowButton = ({ text = "glow button", onClick, disabled }) => {
   return (
     <>
       <style>{`
@@ -10,7 +10,7 @@ const GlowButton = ({ text = "glow button", onClick }) => {
         @keyframes circle-4 { 33% { transform: translate(76px, -12px) translateZ(0); } 66% { transform: translate(112px, -8px) translateZ(0); } }
         @keyframes circle-5 { 33% { transform: translate(84px, 28px) translateZ(0); } 66% { transform: translate(40px, -32px) translateZ(0); } }
         @keyframes circle-6 { 33% { transform: translate(28px, -16px) translateZ(0); } 66% { transform: translate(76px, -56px) translateZ(0); } }
-        @keyframes circle-7 { 33% { transform: translate(8px, 28px) translateZ(0); } 66% { transform: translate(20px, -60px) translateZ(0); } }
+        @keyframes circle-7 { 33% { transform: translate(8px, 28px) translateZ(0); } 66% { transform: translate(20px, -60px) translateZ(0) ; } }
         @keyframes circle-8 { 33% { transform: translate(32px, -4px) translateZ(0); } 66% { transform: translate(56px, -20px) translateZ(0); } }
         @keyframes circle-9 { 33% { transform: translate(20px, -12px) translateZ(0); } 66% { transform: translate(80px, -8px) translateZ(0); } }
         @keyframes circle-10 { 33% { transform: translate(68px, 20px) translateZ(0); } 66% { transform: translate(100px, 28px) translateZ(0); } }
@@ -24,7 +24,8 @@ const GlowButton = ({ text = "glow button", onClick }) => {
 
       <button
         onClick={onClick}
-        className="relative cursor-pointer rounded-[24px] border-none p-0 text-center font-semibold text-white shadow-[0_0_14px_rgba(0,175,123,0.5)] outline-none"
+        disabled={disabled}
+        className={`relative rounded-[24px] border-none p-0 text-center font-semibold text-white shadow-[0_0_14px_rgba(0,175,123,0.5)] outline-none transition-all duration-300 ${disabled ? 'opacity-50 cursor-not-allowed scale-95' : 'cursor-pointer hover:scale-105 active:scale-95'}`}
         style={{
           background: 'radial-gradient(circle, #002396, #00c0b7 80%)',
           letterSpacing: '0.02em',
@@ -38,7 +39,7 @@ const GlowButton = ({ text = "glow button", onClick }) => {
           <span className="relative z-10">{text}</span>
           
           {/* Animated Circles */}
-          {[
+          {!disabled && [
             { id: 12, x: '52px', y: '4px', bg: 'rgba(0, 44, 238, 0.7)', blur: '14px' },
             { id: 11, x: '4px', y: '4px', bg: 'rgba(0, 44, 238, 0.7)', blur: '12px' },
             { id: 10, x: '64px', y: '16px', bg: 'rgba(0, 224, 224, 0.7)', blur: '8px' },
