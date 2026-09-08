@@ -63,7 +63,7 @@ export function parsePinId(url: string): string | null {
   return m ? m[1] : null;
 }
 
-function isPinterestHost(url: string): boolean {
+export function isPinterestHost(url: string): boolean {
   const host = url.replace(/^https?:\/\//iu, '').split(/[/?#]/u)[0].toLowerCase();
   if (host === 'pin.it') return true;
   return /(?:^|\.)pinterest\.(?:[a-z]{2,4}|com?\.[a-z]{2})$/u.test(host);

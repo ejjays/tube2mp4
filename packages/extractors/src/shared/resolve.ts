@@ -4,7 +4,10 @@ import { createXExtractor } from '../x.js';
 import { createBlueskyExtractor } from '../bluesky.js';
 import { createVimeoExtractor } from '../vimeo.js';
 import { createDailymotionExtractor } from '../dailymotion.js';
-import { createPinterestExtractor } from '../pinterest.js';
+import {
+  createPinterestExtractor,
+  isPinterestHost,
+} from '../pinterest.js';
 import { createRedditExtractor } from '../reddit.js';
 import { createSnapchatExtractor } from '../snapchat.js';
 import { createTwitchExtractor } from '../twitch.js';
@@ -26,6 +29,8 @@ function matches(host: string, domain: string): boolean {
 
 interface Route {
   domains: string[];
+  // for hosts a plain suffix match can't express (multi-TLD ccTLDs)
+  test?: (url: string) => boolean;
   create: (env: ExtractorEnv) => Extractor;
 }
 
@@ -34,7 +39,11 @@ const ROUTES: Route[] = [
   { domains: ['bsky.app'], create: createBlueskyExtractor },
   { domains: ['vimeo.com'], create: createVimeoExtractor },
   { domains: ['dailymotion.com', 'dai.ly'], create: createDailymotionExtractor },
-  { domains: ['pinterest.com', 'pinterest.co.uk', 'pin.it'], create: createPinterestExtractor },
+  {
+    domains: ['pinterest.com', 'pinterest.co.uk', 'pin.it'],
+    test: isPinterestHost,
+    create: createPinterestExtractor,
+  },
   { domains: ['reddit.com', 'redd.it', 'old.reddit.com'], create: createRedditExtractor },
   { domains: ['snapchat.com', 't.snapchat.com', 'story.snapchat.com'], create: createSnapchatExtractor },
   { domains: ['twitch.tv', 'clip.twitch.tv'], create: createTwitchExtractor },
@@ -52,8 +61,10 @@ export function getExtractor(
   env: ExtractorEnv = defaultEnv
 ): Extractor | null {
   const host = hostOf(url);
-  const route = ROUTES.find((entry) =>
-    entry.domains.some((domain) => matches(host, domain))
+  const route = ROUTES.find(
+    (entry) =>
+      entry.domains.some((domain) => matches(host, domain)) ||
+      entry.test?.(url) === true
   );
   return route ? route.create(env) : null;
 }

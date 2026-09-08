@@ -3,15 +3,7 @@ import {
   Format,
   ExtractorError,
   getExtractor as pkgGetExtractor,
-  createFacebookExtractor,
-  createThreadsExtractor,
-  createTikTokExtractor,
   createBilibiliExtractor,
-  createDailymotionExtractor,
-  createPinterestExtractor,
-  createRedditExtractor,
-  createSnapchatExtractor,
-  createTwitchExtractor,
 } from '@phantom/extractors';
 import { getInfo as youtubeGetInfo } from './youtube';
 import { getInfo as instagramGetInfo } from './instagram';
@@ -26,16 +18,7 @@ import { getBilibiliCookie } from '../lib/settings';
 import { extractFromPage } from '../lib/webviewExtraction/host';
 import { pageScanToVideoInfo } from '../lib/webviewExtraction/normalize';
 import { probeFileSize } from './shared/utils';
-import { mobileSharedEnv, mobileSharedEnvWithThumbs } from './shared/env';
-
-const facebookExtractor = createFacebookExtractor(mobileSharedEnv);
-const threadsExtractor = createThreadsExtractor(mobileSharedEnv);
-const tiktokExtractor = createTikTokExtractor(mobileSharedEnv);
-const dailymotionExtractor = createDailymotionExtractor(mobileSharedEnv);
-const pinterestExtractor = createPinterestExtractor(mobileSharedEnv);
-const redditExtractor = createRedditExtractor(mobileSharedEnv);
-const snapchatExtractor = createSnapchatExtractor(mobileSharedEnv);
-const twitchExtractor = createTwitchExtractor(mobileSharedEnv);
+import { mobileSharedEnvWithThumbs } from './shared/env';
 
 export type OnPartial = (info: VideoInfo) => void;
 
@@ -48,6 +31,10 @@ function matches(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
 
+// only these keep on-device paths — WebView BotGuard (youtube), native
+// login (instagram), isrc/drm fallbacks (spotify, soundcloud) and the
+// cookie-injected bilibili client. everything else comes from the shared
+// package registry, so a new platform added there works here for free.
 async function dispatch(
   host: string,
   url: string,
@@ -61,66 +48,30 @@ async function dispatch(
     return spotifyGetInfo(url, onPartial);
   }
 
-  if (
-    matches(host, 'bilibili.tv') ||
-    matches(host, 'biliintl.com') ||
-    matches(host, 'bili.im')
-  ) {
-    const cookie = await getBilibiliCookie();
-    const env = cookie ? { ...mobileSharedEnv, cookie } : mobileSharedEnv;
-    return createBilibiliExtractor(env).getInfo(url);
-  }
-
-  if (matches(host, 'tiktok.com')) {
-    return tiktokExtractor.getInfo(url);
+  if (matches(host, 'soundcloud.com')) {
+    return soundcloudGetInfo(url, onPartial);
   }
 
   if (matches(host, 'instagram.com')) {
     return instagramGetInfo(url);
   }
 
-  if (matches(host, 'threads.net') || matches(host, 'threads.com')) {
-    return threadsExtractor.getInfo(url);
-  }
-
   if (
-    matches(host, 'facebook.com') ||
-    matches(host, 'fb.watch') ||
-    matches(host, 'fb.com')
+    matches(host, 'bilibili.tv') ||
+    matches(host, 'biliintl.com') ||
+    matches(host, 'bili.im')
   ) {
-    return facebookExtractor.getInfo(
-      url,
-      onPartial ? { onPartial } : {}
-    );
-  }
-
-  if (matches(host, 'soundcloud.com')) {
-    return soundcloudGetInfo(url, onPartial);
-  }
-
-  // x / bluesky / vimeo / instagram-resolved hosts fall through to the
-  // shared package below; youtube / spotify / soundcloud keep their
-  // on-device paths (WebView BotGuard, native login, DRM fallback).
-  if (matches(host, 'reddit.com') || matches(host, 'redd.it')) {
-    return redditExtractor.getInfo(url);
-  }
-  if (matches(host, 'dailymotion.com') || matches(host, 'dai.ly')) {
-    return dailymotionExtractor.getInfo(url);
-  }
-  if (matches(host, 'pin.it') || /(?:^|\.)pinterest\.(?:[a-z]{2,4}|com?\.[a-z]{2})$/u.test(host)) {
-    return pinterestExtractor.getInfo(url);
-  }
-  if (matches(host, 'twitch.tv') || matches(host, 'clip.twitch.tv')) {
-    return twitchExtractor.getInfo(url, onPartial ? { onPartial } : {});
-  }
-  if (matches(host, 'snapchat.com') || matches(host, 't.snapchat.com') || matches(host, 'story.snapchat.com')) {
-    return snapchatExtractor.getInfo(url);
+    const cookie = await getBilibiliCookie();
+    const env = cookie
+      ? { ...mobileSharedEnvWithThumbs, cookie }
+      : mobileSharedEnvWithThumbs;
+    return createBilibiliExtractor(env).getInfo(url);
   }
 
   const pkg = pkgGetExtractor(url, mobileSharedEnvWithThumbs);
-  if (pkg) return pkg.getInfo(url) as Promise<VideoInfo | null>;
+  if (pkg) return pkg.getInfo(url, onPartial ? { onPartial } : {});
 
-  return Promise.resolve(null);
+  return null;
 }
 
 const FAST_RESOLVE_DISABLED =

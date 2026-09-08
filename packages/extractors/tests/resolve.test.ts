@@ -39,6 +39,19 @@ describe('getExtractor routing', () => {
     expect(getExtractor('https://old.reddit.com/comments/abc/', env)).not.toBeNull();
   });
 
+  // routing must accept every host the pinterest extractor itself accepts,
+  // otherwise ccTLD links silently fall through to the webview sniffer
+  it('routes all pinterest ccTLDs, not just .com', () => {
+    for (const url of [
+      'https://www.pinterest.de/pin/1',
+      'https://pinterest.com.au/pin/1',
+      'https://www.pinterest.co.uk/pin/1',
+      'https://pin.it/abc',
+    ]) {
+      expect(getExtractor(url, env), url).not.toBeNull();
+    }
+  });
+
   it('returns a fresh extractor per platform', () => {
     const fb = getExtractor('https://www.facebook.com/reel/1', env);
     const th = getExtractor('https://www.threads.com/@u/post/1', env);
