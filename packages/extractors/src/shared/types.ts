@@ -70,11 +70,23 @@ export interface VideoInfo {
 export class ExtractorError extends Error {
   readonly retryable: boolean;
   readonly expected: boolean;
-  constructor(message: string, retryable = true, expected = false) {
+  /**
+   * The page loaded but the parser found no media. Distinct from "expected":
+   * a private or removed video is also expected, but only this is evidence
+   * our parser broke.
+   */
+  readonly emptyParse: boolean;
+  constructor(
+    message: string,
+    retryable = true,
+    expected = false,
+    emptyParse = false
+  ) {
     super(message);
     this.name = 'ExtractorError';
     this.retryable = retryable;
     this.expected = expected;
+    this.emptyParse = emptyParse;
   }
 }
 

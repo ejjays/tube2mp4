@@ -119,8 +119,8 @@ type LiveCase = {
 const RUN_LIVE = process.env.VITEST_INCLUDE_LIVE === '1';
 const RUN_PROBE = process.env.VITEST_INCLUDE_PROBE === '1';
 
-// noVideo (!retryable && !expected) = page loaded but parser found nothing =
-// real regression → fail. everything else (transient/blocked/removed) skips.
+// emptyParse = page loaded but the parser found no media = real regression →
+// fail. everything else (transient/blocked/removed) skips.
 function classifyLiveFailure(error: unknown): {
   action: 'skip' | 'fail';
   reason: string;
@@ -129,15 +129,15 @@ function classifyLiveFailure(error: unknown): {
     const msg = error instanceof Error ? error.message : String(error);
     return { action: 'fail', reason: `unexpected crash: ${msg}` };
   }
+  if (error.emptyParse) {
+    return { action: 'fail', reason: `parser found no media: ${error.message}` };
+  }
   if (error.retryable) {
     return { action: 'skip', reason: `transient/blocked: ${error.message}` };
   }
-  if (error.expected) {
-    // access/content state, not parser bug. removed = fixture URL rotted →
-    // refresh live-cases.json.
-    return { action: 'skip', reason: `unavailable: ${error.message}` };
-  }
-  return { action: 'fail', reason: `parser found no media: ${error.message}` };
+  // access/content state, not parser bug. removed = fixture URL rotted →
+  // refresh live-cases.json.
+  return { action: 'skip', reason: `unavailable: ${error.message}` };
 }
 
 // instagram authFetch needs a logged-in cookie to see media URLs

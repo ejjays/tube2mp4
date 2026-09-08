@@ -66,19 +66,21 @@ function uploaderFrom(pin: PidgetsPin): string {
   );
 }
 
-// Path only. Gating on host here would drop everything isPinterestHost()
-// routes (apex pinterest.com, ccTLDs) and silently resolve to null.
-const PIN_PATH_RE = /\/pin\/(?:[\w-]+--)?(\d{4,})/iu;
-
-export function parsePinId(url: string): string | null {
-  const m = url.match(PIN_PATH_RE);
-  return m ? m[1] : null;
-}
+const PIN_PATH_RE = /\/pin\/(?:[\w-]+--)?(\d+)/iu;
 
 export function isPinterestHost(url: string): boolean {
   const host = hostOf(url);
   if (host === 'pin.it') return true;
   return /(?:^|\.)pinterest\.(?:[a-z]{2,4}|com?\.[a-z]{2})$/u.test(host);
+}
+
+// Gate on isPinterestHost(), not a literal "pinterest." prefix: apex
+// (pinterest.com) and ccTLDs must keep parsing, or the router sends them
+// here and they resolve to null.
+export function parsePinId(url: string): string | null {
+  if (!isPinterestHost(url)) return null;
+  const m = url.match(PIN_PATH_RE);
+  return m ? m[1] : null;
 }
 
 async function resolveShortLink(

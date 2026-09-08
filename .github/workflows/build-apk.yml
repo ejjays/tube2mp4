@@ -71,6 +71,13 @@ jobs:
       - name: Install dependencies (monorepo root)
         run: npm ci
 
+      # EAS copies the workspace and bundles from it; the package ships
+      # prebuilt dist/ (no install-time build), so build it before bundling.
+      - name: Build internal packages
+        run: |
+          npm run build -w @phantom/extractors
+          npm run build -w @phantom/web-mux
+
       - name: Build Android APK locally with EAS
         working-directory: mobile
         env:

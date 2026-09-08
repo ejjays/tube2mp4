@@ -70,6 +70,13 @@ jobs:
       - name: Install dependencies (monorepo root)
         run: npm ci
 
+      # EAS bundles from the workspace; the package ships prebuilt dist/
+      # (no install-time build), so build it before bundling.
+      - name: Build internal packages
+        run: |
+          npm run build -w @phantom/extractors
+          npm run build -w @phantom/web-mux
+
       - name: Hash app sources for apk cache
         id: apphash
         run: echo "hash=${{ hashFiles('mobile/src/**', 'mobile/modules/**', 'mobile/plugins/**', 'mobile/assets/**', 'mobile/app.json', 'mobile/eas.json', 'mobile/package.json', 'package-lock.json') }}" >> "$GITHUB_OUTPUT"

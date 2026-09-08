@@ -59,6 +59,7 @@ export function noVideo(platform: string, noun = 'video'): ExtractorError {
   return new ExtractorError(
     `Couldn't find a downloadable ${noun} at this ${platform} link.`,
     false,
+    true,
     true
   );
 }

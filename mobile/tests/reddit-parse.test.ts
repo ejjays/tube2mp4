@@ -20,10 +20,7 @@ vi.mock('../src/lib/authFetch', () => ({
 
 import { gatedFetch } from '../src/lib/net';
 import { cookieGet } from '../src/lib/authFetch';
-import {
-  createRedditExtractor,
-  __resetRedditSessionForTests,
-} from '@phantom/extractors';
+import { createRedditExtractor } from '@phantom/extractors';
 import { mobileSharedEnv } from '../src/extractors/shared/env';
 
 const mockFetch = vi.mocked(gatedFetch);
@@ -169,9 +166,9 @@ function mockMediaLeg(jsonBody: unknown = POST): void {
   });
 }
 
-// extractor caches loid at module level -> reset per test
+// session jar lives on the extractor instance, so a fresh extractor per test
+// is already an isolated session
 function loadGetInfo() {
-  __resetRedditSessionForTests();
   return (url: string) => createRedditExtractor(mobileSharedEnv).getInfo(url);
 }
 
