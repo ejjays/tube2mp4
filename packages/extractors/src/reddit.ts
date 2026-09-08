@@ -98,6 +98,23 @@ export function __resetRedditSessionForTests(): void {
   sessionJar = null;
 }
 
+async function probeSize(
+  env: ExtractorEnv,
+  url: string
+): Promise<number | undefined> {
+  try {
+    const head = await env.fetch(url, {
+      method: 'HEAD',
+      headers: { 'User-Agent': DESKTOP_UA },
+    } as RequestInit);
+    if (!head.ok) return undefined;
+    const len = head.headers.get('content-length');
+    return len ? parseInt(len, 10) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function fetchMeta(env: ExtractorEnv, id: string): Promise<{ vid: string; title: string; uploader: string; thumbnail?: string } | null> {
   let cookie = await harvestSession(env, id);
   let lastStatus = 0;
@@ -216,6 +233,20 @@ export function createRedditExtractor(env: ExtractorEnv = defaultEnv) {
       const audioUrl = pickAudioUrl(reps, base);
       const formats = buildFormats(reps, base, audioUrl);
       if (formats.length === 0) throw noVideo('Reddit', 'clip');
+      const sizedAudio = formats.find((f) => f.muxAudioUrl)?.muxAudioUrl;
+      const audioSize = sizedAudio
+        ? ((await probeSize(env, sizedAudio)) ?? 0)
+        : 0;
+      for (let i = 0; i < formats.length; i += 3) {
+        const batch = formats.slice(i, i + 3);
+        await Promise.all(
+          batch.map(async (format) => {
+            if (!format.url || format.filesize) return;
+            const videoSize = await probeSize(env, format.url);
+            if (videoSize) format.filesize = videoSize + audioSize;
+          })
+        );
+      }
       const info: VideoInfo = {
         type: 'video',
         id,

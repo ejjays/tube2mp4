@@ -5,7 +5,11 @@ vi.mock('../src/lib/net', () => ({
 }));
 
 import { gatedFetch } from '../src/lib/net';
-import { getInfo } from '../src/extractors/tiktok';
+import { createTikTokExtractor } from '@phantom/extractors';
+import { mobileSharedEnv } from '../src/extractors/shared/env';
+
+const getInfo = (url: string) =>
+  createTikTokExtractor(mobileSharedEnv).getInfo(url);
 
 const mockFetch = vi.mocked(gatedFetch);
 

@@ -101,12 +101,14 @@ describe('bluesky getInfo', () => {
     expect(info?.formats[0].formatId).toBe('720p');
   });
 
-  it('returns null when handle cannot resolve', async () => {
+  it('throws noVideo when handle cannot resolve', async () => {
     fetchSpy
       .mockResolvedValueOnce(jsonRes({}))
       .mockResolvedValueOnce(jsonRes({ thread: {} }));
     const { getInfo } = createBlueskyExtractor(env);
-    expect(await getInfo('https://bsky.app/profile/x/post/y')).toBeNull();
+    await expect(
+      getInfo('https://bsky.app/profile/x/post/y')
+    ).rejects.toThrow(/downloadable video/iu);
   });
 
   it('skipDurationFetch=true skips the duration round-trip', async () => {

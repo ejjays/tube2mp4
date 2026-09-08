@@ -1,6 +1,7 @@
 import { Format, VideoInfo, ExtractorOptions } from './shared/types.js';
 import { ExtractorEnv, defaultEnv } from './shared/env.js';
 import { normalizeTitle, normalizeArtist } from './shared/social.js';
+import { noVideo, classifyThrown } from './shared/errors.js';
 import { DESKTOP_UA, hlsDurationSec, estimateSize } from './shared/util.js';
 
 const APPVIEW = 'https://public.api.bsky.app/xrpc';
@@ -164,7 +165,7 @@ export function createBlueskyExtractor(env: ExtractorEnv = defaultEnv) {
         `${APPVIEW}/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle)}`
       );
       const did = resolved?.did;
-      if (!did) return null;
+      if (!did) throw noVideo('Bluesky');
 
       const thread = await fetchJson<{ thread?: { post?: BskyPost } }>(
         `${APPVIEW}/app.bsky.feed.getPostThread?uri=${encodeURIComponent(
@@ -174,19 +175,19 @@ export function createBlueskyExtractor(env: ExtractorEnv = defaultEnv) {
       const post = thread?.thread?.post;
 
       const found = await resolveView(post);
-      if (!found?.view.playlist) return null;
+      if (!found?.view.playlist) throw noVideo('Bluesky');
 
       const master = await env.fetch(found.view.playlist, {
         headers: { 'User-Agent': DESKTOP_UA },
       });
-      if (!master.ok) return null;
+      if (!master.ok) throw noVideo('Bluesky');
       const variants = parseMaster(await master.text(), found.view.playlist);
-      if (variants.length === 0) return null;
+      if (variants.length === 0) throw noVideo('Bluesky');
 
       // web skips the extra round-trip via env.skipDurationFetch
       const duration = env.skipDurationFetch ? 0 : await fetchDuration(variants);
       const formats = buildFormats(variants, duration);
-      if (formats.length === 0) return null;
+      if (formats.length === 0) throw noVideo('Bluesky');
 
       const info: VideoInfo = {
         type: 'video',
@@ -210,9 +211,7 @@ export function createBlueskyExtractor(env: ExtractorEnv = defaultEnv) {
       info.uploader = normalizeArtist(info as unknown as Record<string, unknown>);
       return info;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[bluesky-extractor] Error extracting ${url}: ${message}`);
-      return null;
+      throw classifyThrown(error, 'Bluesky');
     }
   }
 

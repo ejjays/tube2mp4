@@ -29,7 +29,7 @@ export { createBlueskyExtractor } from './bluesky.js';
 export { createVimeoExtractor } from './vimeo.js';
 export { createDailymotionExtractor } from './dailymotion.js';
 export { createPinterestExtractor, parsePinId } from './pinterest.js';
-export { createRedditExtractor } from './reddit.js';
+export { createRedditExtractor, __resetRedditSessionForTests } from './reddit.js';
 export { createSnapchatExtractor, parseSpotlightId } from './snapchat.js';
 export { createTwitchExtractor } from './twitch.js';
 export { createSoundCloudExtractor } from './soundcloud.js';

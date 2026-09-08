@@ -20,6 +20,11 @@ vi.mock('../src/lib/authFetch', () => ({
 
 import { gatedFetch } from '../src/lib/net';
 import { cookieGet } from '../src/lib/authFetch';
+import {
+  createRedditExtractor,
+  __resetRedditSessionForTests,
+} from '@phantom/extractors';
+import { mobileSharedEnv } from '../src/extractors/shared/env';
 
 const mockFetch = vi.mocked(gatedFetch);
 const mockSession = vi.mocked(cookieGet);
@@ -164,10 +169,10 @@ function mockMediaLeg(jsonBody: unknown = POST): void {
   });
 }
 
-// extractor caches loid at module level -> fresh instance per test
-async function loadGetInfo() {
-  const mod = await import('../src/extractors/reddit');
-  return mod.getInfo;
+// extractor caches loid at module level -> reset per test
+function loadGetInfo() {
+  __resetRedditSessionForTests();
+  return (url: string) => createRedditExtractor(mobileSharedEnv).getInfo(url);
 }
 
 describe('reddit getInfo', () => {

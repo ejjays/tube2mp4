@@ -15,7 +15,11 @@ vi.mock('../src/lib/net', () => ({
 }));
 
 import { gatedFetch } from '../src/lib/net';
-import { getInfo } from '../src/extractors/vimeo';
+import { createVimeoExtractor } from '@phantom/extractors';
+import { mobileSharedEnvWithThumbs } from '../src/extractors/shared/env';
+
+const getInfo = (url: string) =>
+  createVimeoExtractor(mobileSharedEnvWithThumbs).getInfo(url);
 
 const mockFetch = vi.mocked(gatedFetch);
 

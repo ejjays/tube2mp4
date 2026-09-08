@@ -16,20 +16,55 @@ vi.mock('../../src/lib/authFetch', () => ({
   },
 }));
 
-import { getInfo as facebookGetInfo } from '../../src/extractors/facebook';
-import { getInfo as threadsGetInfo } from '../../src/extractors/threads';
-import { getInfo as xGetInfo } from '../../src/extractors/x';
-import { getInfo as tiktokGetInfo } from '../../src/extractors/tiktok';
-import { getInfo as vimeoGetInfo } from '../../src/extractors/vimeo';
-import { getInfo as dailymotionGetInfo } from '../../src/extractors/dailymotion';
+import {
+  createFacebookExtractor,
+  createThreadsExtractor,
+  createXExtractor,
+  createTikTokExtractor,
+  createVimeoExtractor,
+  createDailymotionExtractor,
+  createBlueskyExtractor,
+  createPinterestExtractor,
+  createTwitchExtractor,
+  createBilibiliExtractor,
+  createSnapchatExtractor,
+  createRedditExtractor,
+} from '@phantom/extractors';
+import {
+  mobileSharedEnv,
+  mobileSharedEnvWithThumbs,
+} from '../../src/extractors/shared/env';
+import { getBilibiliCookie } from '../../src/lib/settings';
 import { getInfo as soundcloudGetInfo } from '../../src/extractors/soundcloud';
-import { getInfo as redditGetInfo } from '../../src/extractors/reddit';
-import { getInfo as blueskyGetInfo } from '../../src/extractors/bluesky';
 import { getInfo as instagramGetInfo } from '../../src/extractors/instagram';
-import { getInfo as pinterestGetInfo } from '../../src/extractors/pinterest';
-import { getInfo as twitchGetInfo } from '../../src/extractors/twitch';
-import { getInfo as bilibiliGetInfo } from '../../src/extractors/bilibili';
-import { getInfo as snapchatGetInfo } from '../../src/extractors/snapchat';
+
+const withSharedEnv =
+  (
+    create: (
+      env: typeof mobileSharedEnv
+    ) => { getInfo: (url: string) => Promise<VideoInfo | null> }
+  ) =>
+  (url: string) =>
+    create(mobileSharedEnv).getInfo(url);
+
+const facebookGetInfo = withSharedEnv(createFacebookExtractor);
+const threadsGetInfo = withSharedEnv(createThreadsExtractor);
+const tiktokGetInfo = withSharedEnv(createTikTokExtractor);
+const dailymotionGetInfo = withSharedEnv(createDailymotionExtractor);
+const blueskyGetInfo = withSharedEnv(createBlueskyExtractor);
+const pinterestGetInfo = withSharedEnv(createPinterestExtractor);
+const twitchGetInfo = withSharedEnv(createTwitchExtractor);
+const snapchatGetInfo = withSharedEnv(createSnapchatExtractor);
+const redditGetInfo = withSharedEnv(createRedditExtractor);
+const xGetInfo = (url: string) =>
+  createXExtractor(mobileSharedEnv).getInfo(url, { isAudioMuxed: true });
+const vimeoGetInfo = (url: string) =>
+  createVimeoExtractor(mobileSharedEnvWithThumbs).getInfo(url);
+const bilibiliGetInfo = async (url: string) => {
+  const cookie = await getBilibiliCookie();
+  const env = cookie ? { ...mobileSharedEnv, cookie } : mobileSharedEnv;
+  return createBilibiliExtractor(env).getInfo(url);
+};
 import {
   ExtractorError,
   type VideoInfo,

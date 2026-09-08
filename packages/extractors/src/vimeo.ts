@@ -1,6 +1,7 @@
 import { Format, VideoInfo, ExtractorOptions } from './shared/types.js';
 import { ExtractorEnv, defaultEnv } from './shared/env.js';
 import { normalizeTitle, normalizeArtist } from './shared/social.js';
+import { noVideo, classifyThrown } from './shared/errors.js';
 import { DESKTOP_UA, VIMEO_REFERER, estimateSize } from './shared/util.js';
 
 interface Progressive {
@@ -339,11 +340,11 @@ export function createVimeoExtractor(env: ExtractorEnv = defaultEnv) {
     try {
       const ref = parseId(url);
       if (!ref) return null;
-      return await viaConfig(ref, url);
+      const info = await viaConfig(ref, url);
+      if (!info) throw noVideo('Vimeo');
+      return info;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[vimeo-extractor] Error extracting ${url}: ${message}`);
-      return null;
+      throw classifyThrown(error, 'Vimeo');
     }
   }
 
