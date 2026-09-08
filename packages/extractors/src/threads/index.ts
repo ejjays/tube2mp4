@@ -1,8 +1,9 @@
-import { Format, VideoInfo, ExtractorOptions } from '../shared/types.js';
+import { VideoInfo, ExtractorOptions } from '../shared/types.js';
 import { ExtractorEnv, defaultEnv } from '../shared/env.js';
 import { DESKTOP_UA } from '../shared/util.js';
 import { buildPageHeaders } from '../shared/headers.js';
 import { noVideo, classifyThrown } from '../shared/errors.js';
+import { envFetch, backfillSizes, selectFormat } from '../shared/fetch.js';
 import { parseHtml } from './parser.js';
 import { normalizeVideoInfo } from './normalizer.js';
 
@@ -21,7 +22,7 @@ async function fetchPage(
   options: ExtractorOptions
 ): Promise<{ html: string; targetUrl: string } | null> {
   const cookie = typeof options.cookie === 'string' ? options.cookie : null;
-  const res = await env.fetch(target, {
+  const res = await envFetch(env, target, {
     headers: { ...HEADERS, ...(cookie ? { Cookie: cookie } : {}) },
   });
   if (!res.ok) return null;
@@ -29,44 +30,35 @@ async function fetchPage(
   return { html: await res.text(), targetUrl };
 }
 
-async function fetchFileSize(env: ExtractorEnv, url: string): Promise<number | undefined> {
-  try {
-    const res = await env.fetch(url, {
-      method: 'HEAD',
-      headers: { 'User-Agent': DESKTOP_UA },
-    });
-    if (!res.ok) return undefined;
-    const len = res.headers.get('content-length');
-    return len ? parseInt(len, 10) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 export function createThreadsExtractor(env: ExtractorEnv = defaultEnv) {
-  async function getInfo(url: string, options: ExtractorOptions = {}): Promise<VideoInfo | null> {
+  async function getInfo(
+    url: string,
+    options: ExtractorOptions = {}
+  ): Promise<VideoInfo | null> {
     try {
       const primary = await fetchPage(env, url, options);
-      let videoInfo = primary ? normalizeVideoInfo(primary.targetUrl, parseHtml(primary.html, primary.targetUrl)) : null;
+      let videoInfo = primary
+        ? normalizeVideoInfo(
+            primary.targetUrl,
+            parseHtml(primary.html, primary.targetUrl)
+          )
+        : null;
 
       if (!videoInfo || videoInfo.formats.length === 0) {
         const embed = await fetchPage(env, buildEmbedUrl(url), options);
-        const alt = embed ? normalizeVideoInfo(embed.targetUrl, parseHtml(embed.html, embed.targetUrl)) : null;
+        const alt = embed
+          ? normalizeVideoInfo(
+              embed.targetUrl,
+              parseHtml(embed.html, embed.targetUrl)
+            )
+          : null;
         if (alt && alt.formats.length > 0) videoInfo = alt;
       }
 
-      if (!videoInfo || videoInfo.formats.length === 0) throw noVideo('Threads');
+      if (!videoInfo || videoInfo.formats.length === 0)
+        throw noVideo('Threads');
 
-      for (let i = 0; i < videoInfo.formats.length; i += 3) {
-        const batch = videoInfo.formats.slice(i, i + 3);
-        await Promise.all(
-          batch.map(async (format: Format) => {
-            if (!format.url || format.filesize) return;
-            const size = await fetchFileSize(env, format.url);
-            if (size) format.filesize = size;
-          })
-        );
-      }
+      await backfillSizes(env, videoInfo.formats, { 'User-Agent': DESKTOP_UA });
 
       return videoInfo;
     } catch (error: unknown) {
@@ -74,10 +66,12 @@ export function createThreadsExtractor(env: ExtractorEnv = defaultEnv) {
     }
   }
 
-  function getStream(videoInfo: VideoInfo, options: ExtractorOptions = {}): Promise<ReadableStream> {
-    const sel =
-      videoInfo.formats.find((f) => String(f.formatId) === String(options.formatId)) ?? videoInfo.formats[0];
-    if (!sel?.url) throw new Error('No stream URL found');
+  function getStream(
+    videoInfo: VideoInfo,
+    options: ExtractorOptions = {}
+  ): Promise<ReadableStream> {
+    const sel = selectFormat(videoInfo, options);
+    if (!sel?.url) throw noVideo('Threads');
     return env.streamUrl(sel.url, {
       'User-Agent': DESKTOP_UA,
       Referer: STREAM_REFERER,

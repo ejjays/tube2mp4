@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { View, Text, Pressable, TextInput } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, Check, Heart, Wallet } from 'lucide-react-native';
 import tw from '../lib/tw';
+import CyanButton from './CyanButton';
 import KeyboardAvoidingForm from './KeyboardAvoidingForm';
 import { tapSelection } from '../lib/haptics';
 import heroBg from '../../assets/support/hero-bg.json';
@@ -308,40 +308,20 @@ export default function SupportPanel({
             );
           })}
 
-          <Pressable
-            onPress={() => {
-              if (!method) return;
-              if (method.kind === 'paymongo') {
-                setPayOpen(true);
-                return;
-              }
-              onPay(method, amount);
-            }}
-            disabled={!method}
-            style={({ pressed }) => [
-              tw`mt-8`,
-              pressed && method ? { transform: [{ scale: 0.98 }] } : null,
-            ]}
-          >
-            <LinearGradient
-              colors={method ? ['#22d3ee', '#06b6d4'] : ['#1e293b', '#1e293b']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[
-                tw`items-center rounded-full py-4`,
-                method ? ctaGlow : null,
-              ]}
-            >
-              <Text
-                style={[
-                  tw`font-sans-bold text-[16px]`,
-                  { color: method ? '#04101f' : '#64748b' },
-                ]}
-              >
-                {method ? `Support via ${method.label}` : 'Choose a method'}
-              </Text>
-            </LinearGradient>
-          </Pressable>
+          <View style={tw`mt-8`}>
+            <CyanButton
+              label={method ? `Support via ${method.label}` : 'Choose a method'}
+              onPress={() => {
+                if (!method) return;
+                if (method.kind === 'paymongo') {
+                  setPayOpen(true);
+                  return;
+                }
+                onPay(method, amount);
+              }}
+              disabled={!method}
+            />
+          </View>
         </View>
       </KeyboardAvoidingForm>
       {payOpen ? (

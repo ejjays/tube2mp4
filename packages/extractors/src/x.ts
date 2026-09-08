@@ -2,6 +2,13 @@ import { Format, VideoInfo, ExtractorOptions } from './shared/types.js';
 import { ExtractorEnv, defaultEnv } from './shared/env.js';
 import { normalizeTitle, normalizeArtist } from './shared/social.js';
 import { DESKTOP_UA, TCO_URL_RE } from './shared/util.js';
+import { classifyThrown, noVideo, fromStatus } from './shared/errors.js';
+import {
+  envFetch,
+  backfillSizes,
+  selectFormat,
+  buildVideoInfo,
+} from './shared/fetch.js';
 
 interface XVariant {
   content_type?: string;
@@ -36,10 +43,7 @@ function pickMedia(tweet: XTweet): XMedia | undefined {
   );
 }
 
-function buildFormats(
-  media: XMedia,
-  isAudioMuxed: boolean
-): Format[] {
+function buildFormats(media: XMedia, isAudioMuxed: boolean): Format[] {
   const mapped = (media.video_info?.variants ?? [])
     .filter((variant) => variant.content_type === 'video/mp4' && variant.url)
     .map((variant): Format => {
@@ -77,6 +81,8 @@ function buildFormats(
   return deduped;
 }
 
+const REFERER = 'https://x.com/';
+
 export function createXExtractor(env: ExtractorEnv = defaultEnv) {
   async function getInfo(
     url: string,
@@ -88,40 +94,34 @@ export function createXExtractor(env: ExtractorEnv = defaultEnv) {
       const id = idMatch[1];
       const api = `https://cdn.syndication.twimg.com/tweet-result?id=${id}&token=${tweetToken(id)}&lang=en`;
 
-      const response = await env.fetch(api, {
+      const response = await envFetch(env, api, {
         headers: { 'User-Agent': DESKTOP_UA, Accept: 'application/json' },
       });
-      if (!response.ok) return null; // gated/protected — caller falls back
+      if (!response.ok) throw fromStatus(response.status, 'X', 'post');
 
       const tweet = (await response.json()) as XTweet;
       const media = pickMedia(tweet);
-      if (!media) return null;
+      if (!media) throw noVideo('X');
 
       const formats = buildFormats(media, options.isAudioMuxed === true);
-      if (formats.length === 0) return null;
+      if (formats.length === 0) throw noVideo('X');
 
       // twimg omits filesize — HEAD each variant, fail-soft
-      await Promise.all(
-        formats.map(async (format) => {
-          try {
-            const head = await env.fetch(format.url, {
-              method: 'HEAD',
-              headers: { 'User-Agent': DESKTOP_UA, Referer: 'https://x.com/' },
-            });
-            const len = head.headers.get('content-length');
-            if (len) format.filesize = parseInt(len, 10);
-          } catch {
-            /* size optional */
-          }
-        })
+      await backfillSizes(
+        env,
+        formats,
+        {
+          'User-Agent': DESKTOP_UA,
+          Referer: REFERER,
+        },
+        formats.length
       );
 
       const caption = (tweet.text || tweet.full_text || 'X Video')
         .replace(TCO_URL_RE, '')
         .trim();
 
-      const info: VideoInfo = {
-        type: 'video',
+      const info = buildVideoInfo({
         id,
         title: caption || 'X Video',
         uploader: tweet.user?.name || tweet.user?.screen_name || 'X User',
@@ -129,20 +129,15 @@ export function createXExtractor(env: ExtractorEnv = defaultEnv) {
         thumbnail: media.media_url_https || undefined,
         formats,
         extractorKey: 'x',
-        isJsInfo: true,
-        fromBrain: false,
-        isPartial: false,
-        isIsrcMatch: false,
-        isFullData: true,
-      };
+      });
 
       info.title = normalizeTitle(info as unknown as Record<string, unknown>);
-      info.uploader = normalizeArtist(info as unknown as Record<string, unknown>);
+      info.uploader = normalizeArtist(
+        info as unknown as Record<string, unknown>
+      );
       return info;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[x-extractor] Error extracting ${url}: ${message}`);
-      return null;
+      throw classifyThrown(error, 'X');
     }
   }
 
@@ -150,15 +145,12 @@ export function createXExtractor(env: ExtractorEnv = defaultEnv) {
     videoInfo: VideoInfo,
     options: ExtractorOptions = {}
   ): Promise<ReadableStream> {
-    const selected =
-      videoInfo.formats.find(
-        (format) => String(format.formatId) === String(options.formatId)
-      ) || videoInfo.formats[0];
-    if (!selected?.url) throw new Error('No stream URL found');
+    const selected = selectFormat(videoInfo, options);
+    if (!selected?.url) throw noVideo('X');
 
     return env.streamUrl(selected.url, {
       'User-Agent': DESKTOP_UA,
-      Referer: 'https://x.com/',
+      Referer: REFERER,
     });
   }
 

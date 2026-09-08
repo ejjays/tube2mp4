@@ -87,10 +87,10 @@ describe('error factories', () => {
     expect(e.message).toContain('(NSFW)');
   });
 
-  it('noVideo is permanent, not expected', () => {
+  it('noVideo is permanent, but expected', () => {
     const e = noVideo('Reddit');
     expect(e.retryable).toBe(false);
-    expect(e.expected).toBe(false);
+    expect(e.expected).toBe(true);
     expect(e.message).toContain('downloadable');
   });
 

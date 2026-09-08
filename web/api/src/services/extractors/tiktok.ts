@@ -1,23 +1,36 @@
 import { Readable } from 'node:stream';
-import { createTikTokExtractor, getTikTokCookie } from '@phantom/extractors';
+import { createTikTokExtractor } from '@phantom/extractors';
 import { sharedBackendEnv } from './sharedEnv.js';
 import { secureFetch } from '../../utils/network/security.util.js';
-import type { Extractor, ExtractorOptions, VideoInfo } from '../../types/index.js';
+import type {
+  Extractor,
+  ExtractorOptions,
+  VideoInfo,
+} from '../../types/index.js';
 
 const DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
 const tkExtractor = createTikTokExtractor(sharedBackendEnv);
 
-export async function getInfo(url: string, options: ExtractorOptions = {}): Promise<VideoInfo | null> {
+export async function getInfo(
+  url: string,
+  options: ExtractorOptions = {}
+): Promise<VideoInfo | null> {
   try {
-    return (await tkExtractor.getInfo(url, options as unknown as Parameters<typeof tkExtractor.getInfo>[1])) as VideoInfo | null;
+    return (await tkExtractor.getInfo(
+      url,
+      options as unknown as Parameters<typeof tkExtractor.getInfo>[1]
+    )) as VideoInfo | null;
   } catch {
     return null;
   }
 }
 
-export async function getStream(videoInfo: VideoInfo, options: ExtractorOptions = {}): Promise<Readable> {
+export async function getStream(
+  videoInfo: VideoInfo,
+  options: ExtractorOptions = {}
+): Promise<Readable> {
   const selected =
     videoInfo.formats.find(
       (format) => String(format.formatId) === String(options.formatId)
@@ -31,7 +44,7 @@ export async function getStream(videoInfo: VideoInfo, options: ExtractorOptions 
     Referer: 'https://www.tiktok.com/',
     Range: 'bytes=0-',
   };
-  const cookie = getTikTokCookie(videoInfo.id);
+  const cookie = tkExtractor.cookieFor(videoInfo.id);
   if (cookie) headers.Cookie = cookie;
 
   const response = await secureFetch(selected.url, { headers });

@@ -57,15 +57,22 @@ describe('extractor error helpers', () => {
     }
   });
 
-  it('leaves breakage-signal fails unexpected so they reach crash reports', () => {
+  it('treats transient + content-state fails as expected (no crash reports)', () => {
     for (const err of [
       noVideo('YouTube'),
       rateLimited('YouTube'),
       serverError('YouTube'),
       temporaryError('YouTube'),
     ]) {
-      expect(err.expected).toBe(false);
+      expect(err.expected).toBe(true);
     }
+  });
+
+  it('keeps expected/retryable orthogonal', () => {
+    expect(noVideo('YouTube').retryable).toBe(false);
+    expect(rateLimited('YouTube').retryable).toBe(true);
+    expect(serverError('YouTube').retryable).toBe(true);
+    expect(temporaryError('YouTube').retryable).toBe(true);
   });
 
   it('names the platform + reason in the message', () => {

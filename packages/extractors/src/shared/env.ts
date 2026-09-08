@@ -20,6 +20,8 @@ export interface ExtractorEnv {
     url: string,
     headers: Record<string, string>
   ) => Promise<{ ok: boolean; status: number; setCookie: string | null }>;
+  /** Defaults to 10s. Set 0 only if the injected fetch has its own deadline. */
+  timeoutMs?: number;
 }
 
 export const defaultEnv: ExtractorEnv = {

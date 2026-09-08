@@ -1,6 +1,7 @@
 import { Format, VideoInfo } from '../shared/types.js';
 import { normalizeTitle, normalizeArtist } from '../shared/social.js';
 import { IgParsed, IgMedia } from './types.js';
+import { buildVideoInfo } from '../shared/fetch.js';
 
 function toFormat(media: IgMedia, index: number, total: number): Format {
   const dims =
@@ -53,8 +54,7 @@ export function normalizeVideoInfo(
     toFormat(media, index, total)
   );
   if (formats.length === 0) return null;
-  const info: VideoInfo = {
-    type: 'video',
+  const info = buildVideoInfo({
     id: parsedData.id || url,
     title: parsedData.title || 'Instagram Video',
     uploader: parsedData.uploader || 'Instagram User',
@@ -62,11 +62,6 @@ export function normalizeVideoInfo(
     thumbnail: parsedData.thumbnail,
     formats,
     extractorKey: 'instagram',
-    isJsInfo: true,
-    fromBrain: false,
-    isPartial: false,
-    isIsrcMatch: false,
-    isFullData: true,
     downloadHeaders: {
       'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
@@ -75,7 +70,7 @@ export function normalizeVideoInfo(
       'Accept-Language': 'en-US,en;q=0.9',
       Range: 'bytes=0-',
     },
-  };
+  });
   if (parsedData.title) {
     info.metascraper = { title: parsedData.title };
   }

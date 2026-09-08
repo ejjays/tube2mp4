@@ -61,7 +61,9 @@ describe('bluesky getInfo', () => {
       );
 
     const { getInfo } = createBlueskyExtractor(env);
-    const info = await getInfo('https://bsky.app/profile/u.bsky.social/post/rkey');
+    const info = await getInfo(
+      'https://bsky.app/profile/u.bsky.social/post/rkey'
+    );
     expect(info).not.toBeNull();
     expect(info?.extractorKey).toBe('bluesky');
     expect(info?.uploader).toBe('Test');
@@ -106,9 +108,9 @@ describe('bluesky getInfo', () => {
       .mockResolvedValueOnce(jsonRes({}))
       .mockResolvedValueOnce(jsonRes({ thread: {} }));
     const { getInfo } = createBlueskyExtractor(env);
-    await expect(
-      getInfo('https://bsky.app/profile/x/post/y')
-    ).rejects.toThrow(/downloadable video/iu);
+    await expect(getInfo('https://bsky.app/profile/x/post/y')).rejects.toThrow(
+      /downloadable video/iu
+    );
   });
 
   it('skipDurationFetch=true skips the duration round-trip', async () => {

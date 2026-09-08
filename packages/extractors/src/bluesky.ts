@@ -2,7 +2,13 @@ import { Format, VideoInfo, ExtractorOptions } from './shared/types.js';
 import { ExtractorEnv, defaultEnv } from './shared/env.js';
 import { normalizeTitle, normalizeArtist } from './shared/social.js';
 import { noVideo, classifyThrown } from './shared/errors.js';
-import { DESKTOP_UA, hlsDurationSec, estimateSize } from './shared/util.js';
+import { DESKTOP_UA } from './shared/util.js';
+import { envFetch, selectFormat, buildVideoInfo } from './shared/fetch.js';
+import {
+  parseHlsMaster,
+  hlsVariantsToFormats,
+  mediaPlaylistDuration,
+} from './shared/hls.js';
 
 const APPVIEW = 'https://public.api.bsky.app/xrpc';
 
@@ -51,64 +57,22 @@ function quotedUri(post: BskyPost | undefined): string | undefined {
   return rec?.uri ?? rec?.record?.uri;
 }
 
-function parseMaster(master: string, masterUrl: string): Variant[] {
-  const lines = master.split(/\r?\n/u);
-  const out: Variant[] = [];
-  for (let i = 0; i < lines.length; i += 1) {
-    if (!lines[i].startsWith('#EXT-X-STREAM-INF:')) continue;
-    const rel = lines[i + 1]?.trim();
-    if (!rel || rel.startsWith('#')) continue;
-    const res = lines[i].match(/RESOLUTION=(\d+)x(\d+)/u);
-    const bw = lines[i].match(/BANDWIDTH=(\d+)/u);
-    out.push({
-      url: new URL(rel, masterUrl).toString(),
-      width: res ? Number(res[1]) : 0,
-      height: res ? Number(res[2]) : 0,
-      bandwidth: bw ? Number(bw[1]) : 0,
-    });
-  }
-  return out;
-}
-
 function buildFormats(variants: Variant[], durationSec: number): Format[] {
-  const seen = new Set<number>();
-  const formats: Format[] = [];
-  for (const variant of variants) {
-    const short =
-      variant.width && variant.height
-        ? Math.min(variant.width, variant.height)
-        : 0;
-    if (seen.has(short)) continue;
-    seen.add(short);
-    formats.push({
-      formatId: short ? `${short}p` : 'source',
-      url: variant.url,
-      extension: 'mp4',
-      resolution:
-        variant.width && variant.height
-          ? `${variant.width}x${variant.height}`
-          : undefined,
-      quality: short ? `${short}p` : 'Source',
-      width: variant.width || undefined,
-      height: variant.height || undefined,
-      tbr: variant.bandwidth ? Math.round(variant.bandwidth / 1000) : undefined,
-      filesize: estimateSize(variant.bandwidth, durationSec),
-      vcodec: 'h264',
-      acodec: 'aac',
-      isMuxed: true,
-      isVideo: true,
-      isAudio: false,
-      isHls: true,
-      note: 'hls m3u8',
-    });
+  const formats = hlsVariantsToFormats(
+    { variants: variants.map((v) => ({ ...v, codecs: '' })) },
+    { durationSec, keepAlive: false }
+  );
+  for (const format of formats) {
+    format.vcodec = 'h264';
+    format.acodec = 'aac';
+    format.note = 'hls m3u8';
   }
-  formats.sort((lhs, rhs) => (rhs.height ?? 0) - (lhs.height ?? 0));
   return formats;
 }
 
 export function createBlueskyExtractor(env: ExtractorEnv = defaultEnv) {
   async function fetchJson<T>(url: string): Promise<T | null> {
-    const res = await env.fetch(url);
+    const res = await envFetch(env, url);
     if (!res.ok) return null;
     return (await res.json()) as T;
   }
@@ -120,11 +84,11 @@ export function createBlueskyExtractor(env: ExtractorEnv = defaultEnv) {
     )[0];
     if (!smallest) return 0;
     try {
-      const res = await env.fetch(smallest.url, {
+      const res = await envFetch(env, smallest.url, {
         headers: { 'User-Agent': DESKTOP_UA },
       });
       if (!res.ok) return 0;
-      return hlsDurationSec(await res.text());
+      return mediaPlaylistDuration(await res.text());
     } catch {
       return 0;
     }
@@ -177,20 +141,21 @@ export function createBlueskyExtractor(env: ExtractorEnv = defaultEnv) {
       const found = await resolveView(post);
       if (!found?.view.playlist) throw noVideo('Bluesky');
 
-      const master = await env.fetch(found.view.playlist, {
+      const master = await envFetch(env, found.view.playlist, {
         headers: { 'User-Agent': DESKTOP_UA },
       });
       if (!master.ok) throw noVideo('Bluesky');
-      const variants = parseMaster(await master.text(), found.view.playlist);
-      if (variants.length === 0) throw noVideo('Bluesky');
+      const parsed = parseHlsMaster(await master.text(), found.view.playlist);
+      if (parsed.variants.length === 0) throw noVideo('Bluesky');
 
       // web skips the extra round-trip via env.skipDurationFetch
-      const duration = env.skipDurationFetch ? 0 : await fetchDuration(variants);
-      const formats = buildFormats(variants, duration);
+      const duration = env.skipDurationFetch
+        ? 0
+        : await fetchDuration(parsed.variants);
+      const formats = buildFormats(parsed.variants, duration);
       if (formats.length === 0) throw noVideo('Bluesky');
 
-      const info: VideoInfo = {
-        type: 'video',
+      const info = buildVideoInfo({
         id: rkey,
         title: post?.record?.text || 'Bluesky Video',
         uploader:
@@ -200,15 +165,12 @@ export function createBlueskyExtractor(env: ExtractorEnv = defaultEnv) {
         duration: duration || undefined,
         formats,
         extractorKey: 'bluesky',
-        isJsInfo: true,
-        fromBrain: false,
-        isPartial: false,
-        isIsrcMatch: false,
-        isFullData: true,
         downloadHeaders: { 'User-Agent': DESKTOP_UA },
-      };
+      });
       info.title = normalizeTitle(info as unknown as Record<string, unknown>);
-      info.uploader = normalizeArtist(info as unknown as Record<string, unknown>);
+      info.uploader = normalizeArtist(
+        info as unknown as Record<string, unknown>
+      );
       return info;
     } catch (error: unknown) {
       throw classifyThrown(error, 'Bluesky');
@@ -220,11 +182,8 @@ export function createBlueskyExtractor(env: ExtractorEnv = defaultEnv) {
     videoInfo: VideoInfo,
     options: ExtractorOptions = {}
   ): Promise<ReadableStream> {
-    const selected =
-      videoInfo.formats.find(
-        (format) => String(format.formatId) === String(options.formatId)
-      ) || videoInfo.formats[0];
-    if (!selected?.url) throw new Error('No stream URL found');
+    const selected = selectFormat(videoInfo, options);
+    if (!selected?.url) throw noVideo('Bluesky');
 
     if (!env.remuxHls) {
       throw new Error(

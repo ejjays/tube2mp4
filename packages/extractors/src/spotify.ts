@@ -1,4 +1,5 @@
 import { ExtractorEnv, defaultEnv } from './shared/env.js';
+import { envFetch } from './shared/fetch.js';
 
 export function parseTrackId(url: string): string | null {
   const match = url.match(/track[/:]([A-Za-z0-9]+)/u);
@@ -176,7 +177,8 @@ export async function fetchSpotifyEmbed(
   env: ExtractorEnv = defaultEnv
 ): Promise<SpotifyEmbed | null> {
   try {
-    const res = await env.fetch(
+    const res = await envFetch(
+      env,
       `https://open.spotify.com/embed/track/${trackId}`,
       {
         headers: {
@@ -196,7 +198,8 @@ export async function fetchSpotifyEmbed(
     const target = encodeURIComponent(
       `https://open.spotify.com/track/${trackId}`
     );
-    const res = await env.fetch(
+    const res = await envFetch(
+      env,
       `https://open.spotify.com/oembed?url=${target}`
     );
     if (res.ok) {
@@ -233,7 +236,8 @@ export async function fetchOdesli(
     const target = encodeURIComponent(
       `https://open.spotify.com/track/${trackId}`
     );
-    const res = await env.fetch(
+    const res = await envFetch(
+      env,
       `https://api.song.link/v1-alpha.1/links?url=${target}`
     );
     if (!res.ok) return null;

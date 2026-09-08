@@ -4,6 +4,8 @@ import {
   ExtractorError,
   getExtractor as pkgGetExtractor,
   createBilibiliExtractor,
+  hostOf,
+  matchesDomain,
 } from '@phantom/extractors';
 import { getInfo as youtubeGetInfo } from './youtube';
 import { getInfo as instagramGetInfo } from './instagram';
@@ -22,14 +24,7 @@ import { mobileSharedEnvWithThumbs } from './shared/env';
 
 export type OnPartial = (info: VideoInfo) => void;
 
-function hostOf(url: string): string {
-  const cleaned = url.replace(/^https?:\/\//iu, '');
-  return cleaned.split(/[/?#]/u)[0].toLowerCase();
-}
-
-function matches(host: string, domain: string): boolean {
-  return host === domain || host.endsWith(`.${domain}`);
-}
+const matches = matchesDomain;
 
 // only these keep on-device paths — WebView BotGuard (youtube), native
 // login (instagram), isrc/drm fallbacks (spotify, soundcloud) and the

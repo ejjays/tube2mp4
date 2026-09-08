@@ -7,6 +7,7 @@ import {
   rateLimited,
   classifyThrown,
 } from '../shared/errors.js';
+import { envFetch, selectFormat } from '../shared/fetch.js';
 import {
   IG_APP_ID,
   LOGGED_OUT_DOC_ID,
@@ -51,7 +52,10 @@ function withTimeout(): { signal: AbortSignal } | Record<string, never> {
   }
 }
 
-function cookieOf(options: ExtractorOptions, env: ExtractorEnv): string | undefined {
+function cookieOf(
+  options: ExtractorOptions,
+  env: ExtractorEnv
+): string | undefined {
   const fromOptions =
     typeof options.cookie === 'string' && options.cookie.length > 0
       ? options.cookie
@@ -65,9 +69,8 @@ function cookieOf(options: ExtractorOptions, env: ExtractorEnv): string | undefi
 }
 
 function setCookiesOf(res: Response): string[] {
-  const getter = (
-    res.headers as unknown as { getSetCookie?: () => string[] }
-  ).getSetCookie;
+  const getter = (res.headers as unknown as { getSetCookie?: () => string[] })
+    .getSetCookie;
   if (typeof getter === 'function') {
     try {
       return getter.call(res.headers) ?? [];
@@ -98,7 +101,8 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
       return Array.from(bytes, (b) => b.toString(36)).join('');
     } catch {
       return (
-        Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+        Math.random().toString(36).slice(2) +
+        Math.random().toString(36).slice(2)
       );
     }
   }
@@ -108,7 +112,8 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
     cookie?: string
   ): Promise<string | null> {
     try {
-      const res = await env.fetch(
+      const res = await envFetch(
+        env,
         `https://i.instagram.com/api/v1/oembed/?url=https://www.instagram.com/p/${shortcode}/`,
         {
           headers: {
@@ -144,11 +149,13 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
             `https://i.instagram.com/api/v1/media/${mediaId}/info/`,
             headers
           )
-        : await env.fetch(
+        : await envFetch(
+            env,
             `https://i.instagram.com/api/v1/media/${mediaId}/info/`,
             { headers, ...withTimeout() } as RequestInit
           );
-    if (res.status === 429 || res.status === 503) throw rateLimited('Instagram');
+    if (res.status === 429 || res.status === 503)
+      throw rateLimited('Instagram');
     if (!res.ok) throw fromStatus(res.status, 'Instagram');
     const data = (await res.json()) as { items?: unknown[] };
     return data?.items?.[0] ?? null;
@@ -161,7 +168,8 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
     if (!cookie && sessionCache && sessionCache.expiry > Date.now()) {
       return sessionCache;
     }
-    const pageRes = await env.fetch(
+    const pageRes = await envFetch(
+      env,
       `https://www.instagram.com/p/${shortcode}/`,
       {
         headers: {
@@ -187,8 +195,7 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
     const csrf =
       jar.csrftoken ??
       (objFrom('InstagramSecurityConfig', html)?.csrf_token as
-        | string
-        | undefined);
+        string | undefined);
     const anon = Object.entries(jar)
       .map(([key, val]) => `${key}=${val}`)
       .join('; ');
@@ -209,10 +216,11 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
   ): Promise<unknown> {
     const mediaId = shortcodeToMediaId(shortcode);
     if (!mediaId) return null;
-    const { lsd, csrf, cookie: sessionCookie } = await getSession(
-      shortcode,
-      cookie
-    );
+    const {
+      lsd,
+      csrf,
+      cookie: sessionCookie,
+    } = await getSession(shortcode, cookie);
     const body = new URLSearchParams({
       av: '0',
       __d: 'www',
@@ -244,7 +252,7 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
     };
     if (csrf) headers['X-CSRFToken'] = csrf;
     if (sessionCookie) headers.Cookie = sessionCookie;
-    const res = await env.fetch('https://www.instagram.com/api/graphql', {
+    const res = await envFetch(env, 'https://www.instagram.com/api/graphql', {
       method: 'POST',
       headers,
       body: body.toString(),
@@ -263,9 +271,7 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
       const json = JSON.parse(text) as {
         data?: { xig_polaris_media?: { if_not_gated_logged_out?: unknown } };
       };
-      return (
-        json?.data?.xig_polaris_media?.if_not_gated_logged_out ?? null
-      );
+      return json?.data?.xig_polaris_media?.if_not_gated_logged_out ?? null;
     } catch {
       return null;
     }
@@ -275,7 +281,8 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
     shortcode: string,
     cookie?: string
   ): Promise<unknown> {
-    const pageRes = await env.fetch(
+    const pageRes = await envFetch(
+      env,
       `https://www.instagram.com/p/${shortcode}/`,
       {
         headers: {
@@ -293,8 +300,7 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
     const lsd =
       (objFrom('LSD', html)?.token as string | undefined) || randomToken();
     const csrf = objFrom('InstagramSecurityConfig', html)?.csrf_token as
-      | string
-      | undefined;
+      string | undefined;
     const webConfig = objFrom('DGWWebConfig', html) ?? {};
     const siteData = objFrom('SiteData', html) ?? {};
     const numQ = (name: string): string | null => {
@@ -337,7 +343,7 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
     };
     if (csrf) headers['X-CSRFToken'] = csrf;
     if (cookie) headers.Cookie = cookie;
-    const res = await env.fetch('https://www.instagram.com/graphql/query', {
+    const res = await envFetch(env, 'https://www.instagram.com/graphql/query', {
       method: 'POST',
       headers,
       body: body.toString(),
@@ -361,7 +367,7 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
   ): Promise<string | null> {
     try {
       const base = url.split('?')[0].replace(/\/?$/u, '/');
-      const res = await env.fetch(`${base}embed/captioned/`, {
+      const res = await envFetch(env, `${base}embed/captioned/`, {
         headers: {
           ...PAGE_HEADERS,
           ...(cookie ? { Cookie: cookie } : {}),
@@ -375,9 +381,10 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
     }
   }
 
+  // 1-byte range GET: CDNs that refuse HEAD still report total size here
   async function fetchSize(url: string): Promise<number | undefined> {
     try {
-      const res = await env.fetch(url, {
+      const res = await envFetch(env, url, {
         headers: {
           'User-Agent': DESKTOP_UA,
           Referer: REFERER,
@@ -477,11 +484,8 @@ export function createInstagramExtractor(env: ExtractorEnv = defaultEnv) {
     videoInfo: VideoInfo,
     options: ExtractorOptions = {}
   ): Promise<ReadableStream> {
-    const target =
-      videoInfo.formats.find(
-        (format) => String(format.formatId) === String(options.formatId)
-      ) ?? videoInfo.formats[0];
-    if (!target?.url) throw new Error('No stream URL found');
+    const target = selectFormat(videoInfo, options);
+    if (!target?.url) throw noVideo('Instagram');
     return env.streamUrl(target.url, {
       'User-Agent': DESKTOP_UA,
       Referer: REFERER,

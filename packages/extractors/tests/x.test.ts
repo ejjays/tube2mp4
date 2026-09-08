@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createXExtractor, tweetToken } from '../src/x.js';
 import type { ExtractorEnv } from '../src/shared/env.js';
 
-function jsonRes(body: unknown, ok = true): Response {
+function jsonRes(body: unknown, ok = true, status = ok ? 200 : 404): Response {
   return {
     ok,
-    status: ok ? 200 : 404,
+    status,
     headers: {
       get: () => null,
     },
@@ -17,11 +17,16 @@ function headRes(len: number): Response {
   return {
     ok: true,
     status: 200,
-    headers: { get: (k: string) => (/content-length/iu.test(k) ? String(len) : null) },
+    headers: {
+      get: (k: string) => (/content-length/iu.test(k) ? String(len) : null),
+    },
   } as unknown as Response;
 }
 
-function makeEnv(fetchFn: typeof fetch): { env: ExtractorEnv; fetch: ReturnType<typeof vi.fn> } {
+function makeEnv(fetchFn: typeof fetch): {
+  env: ExtractorEnv;
+  fetch: ReturnType<typeof vi.fn>;
+} {
   const fetchSpy = vi.fn(fetchFn);
   return {
     env: { fetch: fetchSpy as unknown as typeof fetch },
@@ -88,7 +93,9 @@ describe('x getInfo', () => {
       .mockImplementation((input: unknown, init?: RequestInit) => {
         if (init?.method !== 'HEAD') return jsonRes({});
         const u = String(input);
-        return Promise.resolve(headRes(u.includes('1280x720') ? 20000000 : 8000000));
+        return Promise.resolve(
+          headRes(u.includes('1280x720') ? 20000000 : 8000000)
+        );
       });
 
     const { getInfo } = createXExtractor(env);
@@ -139,11 +146,27 @@ describe('x getInfo', () => {
     expect(info?.thumbnail).toContain('q.jpg');
   });
 
-  it('returns null on gated/protected tweet (non-ok api response)', async () => {
-    fetchSpy.mockResolvedValueOnce(jsonRes({}, false));
-    const { getInfo } = createXExtractor(env);
-    expect(await getInfo('https://x.com/u/status/1')).toBeNull();
-  });
+  it.each([
+    [404, true, false],
+    [503, true, true],
+    [429, true, true],
+    [403, true, false],
+  ])(
+    'throws a typed ExtractorError on HTTP %i',
+    async (status, expected, retryable) => {
+      fetchSpy.mockResolvedValueOnce(jsonRes({}, false, status));
+      const { getInfo } = createXExtractor(env);
+      const err = (await getInfo('https://x.com/u/status/1').catch(
+        (e) => e
+      )) as Error & {
+        retryable?: boolean;
+        expected?: boolean;
+      };
+      expect(err.name).toBe('ExtractorError');
+      expect(err.expected).toBe(expected);
+      expect(err.retryable).toBe(retryable);
+    }
+  );
 
   it('isAudioMuxed=true marks formats as isAudio for mobile downloader path', async () => {
     fetchSpy
@@ -170,7 +193,9 @@ describe('x getInfo', () => {
       .mockResolvedValueOnce(headRes(1));
 
     const { getInfo } = createXExtractor(env);
-    const info = await getInfo('https://x.com/u/status/2', { isAudioMuxed: true });
+    const info = await getInfo('https://x.com/u/status/2', {
+      isAudioMuxed: true,
+    });
     expect(info?.formats[0].isAudio).toBe(true);
   });
 });

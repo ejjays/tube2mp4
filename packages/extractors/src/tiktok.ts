@@ -3,7 +3,13 @@ import { ExtractorEnv, defaultEnv } from './shared/env.js';
 import { normalizeTitle, normalizeArtist } from './shared/social.js';
 import { DESKTOP_UA } from './shared/util.js';
 import { buildPageHeaders } from './shared/headers.js';
-import { noVideo, fromStatus, temporaryError, classifyThrown } from './shared/errors.js';
+import {
+  noVideo,
+  fromStatus,
+  temporaryError,
+  classifyThrown,
+} from './shared/errors.js';
+import { envFetch, selectFormat, buildVideoInfo } from './shared/fetch.js';
 
 const REFERER = 'https://www.tiktok.com/';
 
@@ -13,15 +19,24 @@ const PAGE_HEADERS: Record<string, string> = {
   'Cache-Control': 'no-cache',
 };
 
-const cookieCache = new Map<string, string>();
+const COOKIE_CACHE_MAX = 100;
 
-export function __resetTikTokCookiesForTests(): void {
-  cookieCache.clear();
+function createCookieStore() {
+  const jar = new Map<string, string>();
+  return {
+    get: (id: string): string | undefined => jar.get(id),
+    set: (id: string, value: string): void => {
+      if (value && jar.size >= COOKIE_CACHE_MAX) {
+        const oldest = jar.keys().next().value;
+        if (oldest !== undefined) jar.delete(oldest);
+      }
+      if (value) jar.set(id, value);
+    },
+    clear: (): void => jar.clear(),
+  };
 }
 
-export function getTikTokCookie(id: string): string | undefined {
-  return cookieCache.get(id);
-}
+type CookieStore = ReturnType<typeof createCookieStore>;
 
 interface TikTokPlayAddr {
   Width?: number;
@@ -157,7 +172,8 @@ function buildPhotoFormats(item: TikTokItem): Format[] {
 }
 
 function setCookiesOf(res: Response): string[] {
-  const getter = (res.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie;
+  const getter = (res.headers as unknown as { getSetCookie?: () => string[] })
+    .getSetCookie;
   if (typeof getter === 'function') {
     try {
       return getter.call(res.headers) ?? [];
@@ -169,31 +185,36 @@ function setCookiesOf(res: Response): string[] {
   return single ? [single] : [];
 }
 
-function captureCookies(id: string, res: Response): string {
+function captureCookies(store: CookieStore, id: string, res: Response): string {
   const header = setCookiesOf(res)
     .map((entry) => entry.split(';')[0].trim())
     .filter(Boolean)
     .join('; ');
-  if (header) {
-    if (cookieCache.size >= 100) {
-      const oldest = cookieCache.keys().next().value;
-      if (oldest !== undefined) cookieCache.delete(oldest);
-    }
-    cookieCache.set(id, header);
-  }
+  store.set(id, header);
   return header;
 }
 
 export function createTikTokExtractor(env: ExtractorEnv = defaultEnv) {
-  async function getInfo(url: string, _options: ExtractorOptions = {}): Promise<VideoInfo | null> {
+  const cookies = createCookieStore();
+
+  async function getInfo(
+    url: string,
+    _options: ExtractorOptions = {}
+  ): Promise<VideoInfo | null> {
     try {
-      const response = await env.fetch(url, { headers: PAGE_HEADERS, redirect: 'follow' } as RequestInit);
+      const response = await envFetch(env, url, {
+        headers: PAGE_HEADERS,
+        redirect: 'follow',
+      } as RequestInit);
       if (!response.ok) throw fromStatus(response.status, 'TikTok');
       const targetUrl = (response as unknown as { url?: string }).url || url;
       const html = await response.text();
       const item = parseUniversalData(html);
       if (!item) {
-        const walled = /tiktok\.com\/login|captcha|verify|robot check|please wait/iu.test(html);
+        const walled =
+          /tiktok\.com\/login|captcha|verify|robot check|please wait/iu.test(
+            html
+          );
         throw walled ? temporaryError('TikTok') : noVideo('TikTok');
       }
       const isPhoto = Boolean(item.imagePost?.images?.length);
@@ -204,26 +225,24 @@ export function createTikTokExtractor(env: ExtractorEnv = defaultEnv) {
           : [];
       if (formats.length === 0) throw noVideo('TikTok');
 
-      const info: VideoInfo = {
-        type: 'video',
+      const info = buildVideoInfo({
         id: item.id || url,
         title: item.desc || 'TikTok Video',
-        uploader: item.author?.nickname || item.author?.uniqueId || 'TikTok User',
+        uploader:
+          item.author?.nickname || item.author?.uniqueId || 'TikTok User',
         webpageUrl: targetUrl,
         thumbnail: item.video?.cover || item.video?.originCover || undefined,
         duration: item.video?.duration,
         formats,
         extractorKey: 'tiktok',
-        isJsInfo: true,
-        fromBrain: false,
-        isPartial: false,
-        isIsrcMatch: false,
         isFullData: !isPhoto,
-      };
+      });
       info.title = normalizeTitle(info as unknown as Record<string, unknown>);
-      info.uploader = normalizeArtist(info as unknown as Record<string, unknown>);
+      info.uploader = normalizeArtist(
+        info as unknown as Record<string, unknown>
+      );
 
-      const cookie = captureCookies(info.id, response);
+      const cookie = captureCookies(cookies, info.id, response);
       info.downloadHeaders = {
         'User-Agent': DESKTOP_UA,
         Referer: REFERER,
@@ -236,19 +255,27 @@ export function createTikTokExtractor(env: ExtractorEnv = defaultEnv) {
     }
   }
 
-  function getStream(videoInfo: VideoInfo, options: ExtractorOptions = {}): Promise<ReadableStream> {
-    const selected =
-      videoInfo.formats.find((f) => String(f.formatId) === String(options.formatId)) ?? videoInfo.formats[0];
-    if (!selected?.url) throw new Error('No stream URL found');
+  function getStream(
+    videoInfo: VideoInfo,
+    options: ExtractorOptions = {}
+  ): Promise<ReadableStream> {
+    const selected = selectFormat(videoInfo, options);
+    if (!selected?.url) throw noVideo('TikTok');
     const headers: Record<string, string> = {
       'User-Agent': DESKTOP_UA,
       Referer: REFERER,
       Range: 'bytes=0-',
     };
-    const cookie = cookieCache.get(videoInfo.id);
+    const cookie = cookies.get(videoInfo.id);
     if (cookie) headers.Cookie = cookie;
     return env.streamUrl(selected.url, headers);
   }
 
-  return { getInfo, getStream };
+  return {
+    getInfo,
+    getStream,
+    __resetCookiesForTests: cookies.clear,
+    /** cookie harvested for this media id, for CDN auth on a custom stream path */
+    cookieFor: cookies.get,
+  };
 }
