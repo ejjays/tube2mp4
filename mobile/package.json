@@ -7,7 +7,7 @@
     "start": "NODE_OPTIONS=\"--require ./userland-shim.cjs\" npx expo start --dev-client",
     "start:userland": "NODE_OPTIONS=\"--require ./userland-shim.cjs\" npx expo start --dev-client --offline",
     "android": "NODE_OPTIONS=\"--require ./userland-shim.cjs\" expo start --android",
-    "eas-build-post-install": "node scripts/ensure-ffmpeg-aar.js",
+    "eas-build-post-install": "node scripts/ensure-ffmpeg-aar.js && node scripts/build-internal-packages.js",
     "typecheck": "tsc --noEmit",
     "test": "npx vitest run",
     "test:live": "VITEST_INCLUDE_LIVE=1 npx vitest run tests/live",
