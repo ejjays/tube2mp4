@@ -29,14 +29,11 @@
       ],
     },
     "web/app": {
-      "entry": ["src/main.tsx", "tests/**/*.test.ts", "tests/**/*.test.tsx", "playwright.config.ts"],
+      "entry": ["src/main.tsx", "tests/**/*.test.ts", "tests/**/*.test.tsx"],
       "vite": false,
       "vitest": false,
       "ignoreDependencies": [
         "@testing-library/jest-dom",
-        // test-only: knip's vitest plugin is off, so these look unused
-        "@testing-library/dom",
-        "@testing-library/react",
         "@vitejs/plugin-react",
         "vite-plugin-sitemap",
       ],
