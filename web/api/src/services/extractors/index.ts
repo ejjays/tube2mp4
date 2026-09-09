@@ -261,6 +261,39 @@ export async function getInfo(
 
   if (fastResult.type === 'meta' && fastResult.data) {
     const meta = fastResult.data;
+
+    /**
+     * Metadata only told us *something* exists; it carries no media. If the
+     * JS extractor is still running it will shortly have real formats, so
+     * wait for it instead of returning a partial with an empty format list.
+     * Bounded by JS_WAIT_MS so a hung platform still degrades to partial
+     * rather than blocking the request.
+     */
+    let waitTimer: ReturnType<typeof setTimeout> | undefined;
+    const settled = await Promise.race([
+      jsTask.then((res) => ({ done: true as const, data: res })),
+      new Promise<{ done: false; data: null }>((resolve) => {
+        waitTimer = setTimeout(
+          () => resolve({ done: false, data: null }),
+          Number(process.env.JS_WAIT_MS) || 8000
+        );
+      }),
+    ]);
+    // don't leave a live timer behind when JS wins the wait
+    if (waitTimer) clearTimeout(waitTimer);
+
+    if (
+      settled.done &&
+      settled.data &&
+      Array.isArray(settled.data.formats) &&
+      settled.data.formats.length > 0
+    ) {
+      if (!settled.data.thumbnail) {
+        settled.data.metascraper = { image: meta.image };
+      }
+      return settled.data as VideoInfo;
+    }
+
     return {
       type: 'video',
       id: `meta_${Buffer.from(url).toString('base64').substring(0, 10)}`,
