@@ -10,13 +10,22 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/*.mjs"],
+      // scripts read typescript7's package.json via require.resolve to find
+      // its bin path; not a real dependency edge
+      "ignoreUnresolved": ["typescript7/package.json"],
     },
     "packages/extractors": {},
     "packages/web-mux": {},
     "web/api": {
       "vite": false,
       "vitest": false,
-      "ignoreDependencies": ["pino-pretty"],
+      "ignoreDependencies": [
+        "pino-pretty",
+        // imported only by tests/e2e/browser.e2e.test.ts, which knip's
+        // default entry tracing doesn't reach
+        "puppeteer-core",
+        "playwright-core",
+      ],
     },
     "web/app": {
       "entry": ["src/main.tsx"],
@@ -25,6 +34,9 @@
       "ignoreDependencies": [
         "@playwright/test",
         "@testing-library/jest-dom",
+        // test-only: knip's vitest plugin is off, so these look unused
+        "@testing-library/dom",
+        "@testing-library/react",
         "@types/styled-components",
         "@vitejs/plugin-react",
         "vite-plugin-sitemap",
