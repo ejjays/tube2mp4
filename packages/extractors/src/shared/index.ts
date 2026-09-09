@@ -65,4 +65,4 @@ export {
 export { normalizeTitle, normalizeArtist } from './social.js';
 export type { RawSocialData } from './social.js';
 
-export { getExtractor, resolve } from './resolve.js';
+export { getExtractor, getRouteName, resolve } from './resolve.js';

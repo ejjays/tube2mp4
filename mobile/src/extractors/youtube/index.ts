@@ -4,6 +4,7 @@ import {
   noVideo,
   temporaryError,
   classifyThrown,
+  buildVideoInfo,
 } from '@phantom/extractors';
 import {
   extractViaWebView,
@@ -14,7 +15,6 @@ import {
 } from './bridge';
 import { DESKTOP_UA } from '../../lib/userAgents';
 import { getYoutubeCookie } from '../../lib/settings';
-import { buildVideoInfo } from '../shared/videoInfo';
 
 const YT_ID =
   /(?:v=|\/v\/|youtu\.be\/|shorts\/|live\/|embed\/)([0-9A-Za-z_-]{11})/u;

@@ -3,6 +3,7 @@ import {
   ExtractorError,
   noVideo,
   temporaryError,
+  buildVideoInfo,
 } from '@phantom/extractors';
 import {
   mergeSpotifyMeta,
@@ -24,7 +25,6 @@ import {
   type OdesliResult,
 } from './api';
 import { lookupSpotifyMapping } from '../../lib/social/registry';
-import { buildVideoInfo } from '../shared/videoInfo';
 import { log } from '../../lib/log';
 
 type Meta = SpotifyMeta;

@@ -23,6 +23,9 @@ import {
   getStream as thGetStream,
 } from './threads/index.js';
 import { getInfo as biGetInfo, getStream as biGetStream } from './bilibili.js';
+import { x } from './x.js';
+import { vimeo } from './vimeo.js';
+import { bluesky } from './bluesky.js';
 import {
   getInfo as genGetInfo,
   getStream as genGetStream,
@@ -33,7 +36,10 @@ import {
   fetchYoutubeOEmbed,
 } from '../../utils/media/metadata.util.js';
 import { recordFailure } from '../../utils/infra/metrics.util.js';
-import { getExtractor as pkgGetExtractor } from '@phantom/extractors';
+import {
+  getExtractor as pkgGetExtractor,
+  getRouteName,
+} from '@phantom/extractors';
 import { sharedBackendEnv } from './sharedEnv.js';
 import { Readable } from 'node:stream';
 
@@ -85,39 +91,29 @@ const genericExtractor: Extractor = {
   getStream: genGetStream,
 };
 
+// single source of truth: the package's ROUTES carry the platform id, so a
+// domain added there is labelled correctly here with no change to this file
 function pkgLabel(url: string): string {
-  if (isHost(url, 'vimeo.com')) return 'vimeo';
-  if (isHost(url, 'bsky.app')) return 'bluesky';
-  if (isHost(url, 'twitter.com') || /\/\/(?:www\.|mobile\.)?x\.com\//u.test(url)) return 'x';
-  if (isHost(url, 'dailymotion.com') || isHost(url, 'dai.ly')) return 'dailymotion';
-  if (isHost(url, 'pinterest.com') || isHost(url, 'pin.it')) return 'pinterest';
-  if (isHost(url, 'reddit.com') || isHost(url, 'redd.it')) return 'reddit';
-  if (isHost(url, 'snapchat.com') || isHost(url, 't.snapchat.com')) return 'snapchat';
-  if (isHost(url, 'twitch.tv')) return 'twitch';
-  return 'pkg-shared';
+  return getRouteName(url) ?? 'pkg-shared';
 }
 
 export function getExtractor(url: string): Extractor | null {
+  // youtube + spotify stay local: they need youtubei.js/PO-token (node-only)
+  // and the brain registry. Everything below is checked before the shared
+  // package router because the package intentionally doesn't ship them.
+  if (isHost(url, 'youtube.com') || isHost(url, 'youtu.be')) return youtube;
+  if (isHost(url, 'spotify.com')) return spotify;
   if (isHost(url, 'instagram.com')) return instagram;
+
+  // shared package is the source of truth for these — adding a platform to
+  // packages/extractors ROUTES makes it work here with no change to this file.
   const pkg = pkgGetExtractor(url, sharedBackendEnv);
   if (pkg) {
     const wrapped = wrapPkg(pkg);
     extractorNames.set(wrapped, pkgLabel(url));
     return wrapped;
   }
-  if (isHost(url, 'youtube.com') || isHost(url, 'youtu.be')) return youtube;
-  if (isHost(url, 'facebook.com') || isHost(url, 'fb.watch')) return facebook;
-  if (isHost(url, 'threads.net') || isHost(url, 'threads.com'))
-    return threads;
-  if (isHost(url, 'tiktok.com')) return tiktok;
-  if (isHost(url, 'spotify.com')) return spotify;
-  if (isHost(url, 'soundcloud.com')) return soundcloud;
-  if (
-    isHost(url, 'bilibili.tv') ||
-    isHost(url, 'biliintl.com') ||
-    isHost(url, 'bili.im')
-  )
-    return bilibili;
+
   return genericExtractor;
 }
 
@@ -285,42 +281,37 @@ export async function getInfo(
   return await jsTask;
 }
 
+// platforms whose JS extractor is preferred over the yt-dlp path. keyed by
+// the package's route id so this can't drift from ROUTES; youtube and
+// spotify are resolved locally first because the package doesn't ship them.
+const JS_STREAM_PLATFORMS = new Set([
+  'facebook',
+  'instagram',
+  'threads',
+  'soundcloud',
+  'vimeo',
+  'dailymotion',
+  'pinterest',
+  'reddit',
+  'snapchat',
+  'twitch',
+]);
+
+const AUDIO_FORMATS = ['mp3', 'm4a', 'audio'];
+
 export function shouldJSStream(url: string, quality: string, format: string) {
   if (isHost(url, 'youtube.com') || isHost(url, 'youtu.be')) {
     return false;
   }
+  if (isHost(url, 'spotify.com')) return true;
 
-  if (
-    isHost(url, 'bilibili.tv') ||
-    isHost(url, 'biliintl.com') ||
-    isHost(url, 'bili.im')
-  ) {
-    return ['mp3', 'm4a', 'audio'].includes(format);
-  }
+  const platform = getRouteName(url);
 
-  if (
-    isHost(url, 'facebook.com') ||
-    isHost(url, 'instagram.com') ||
-    isHost(url, 'threads.net') ||
-    isHost(url, 'threads.com') ||
-    isHost(url, 'spotify.com') ||
-    isHost(url, 'soundcloud.com') ||
-    isHost(url, 'vimeo.com') ||
-    isHost(url, 'dailymotion.com') ||
-    isHost(url, 'dai.ly') ||
-    isHost(url, 'pinterest.com') ||
-    isHost(url, 'pin.it') ||
-    isHost(url, 'reddit.com') ||
-    isHost(url, 'redd.it') ||
-    isHost(url, 'snapchat.com') ||
-    isHost(url, 't.snapchat.com') ||
-    isHost(url, 'twitch.tv')
-  )
-    return true;
+  if (platform === 'bilibili') return AUDIO_FORMATS.includes(format);
+  if (platform && JS_STREAM_PLATFORMS.has(platform)) return true;
+  if (platform === 'tiktok') return false;
 
-  if (isHost(url, 'tiktok.com')) return false;
-
-  if (['mp3', 'm4a', 'audio'].includes(format)) return true;
+  if (AUDIO_FORMATS.includes(format)) return true;
 
   const res = parseInt(quality);
   return !isNaN(res) && res <= 720;
@@ -335,4 +326,7 @@ export {
   soundcloud,
   threads,
   bilibili,
+  x,
+  vimeo,
+  bluesky,
 };

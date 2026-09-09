@@ -71,7 +71,7 @@ export type {
 } from './spotify.js';
 export { normalizeTitle, normalizeArtist } from './social.js';
 export type { RawSocialData } from './social.js';
-export { getExtractor, resolve } from './shared/resolve.js';
+export { getExtractor, getRouteName, resolve } from './shared/resolve.js';
 
 export {
   buildVideoInfo,
