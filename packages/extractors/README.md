@@ -55,12 +55,11 @@ through `normalizeTitle`/`normalizeArtist` (vendored from
 `social.service.ts`) before returning, so titles/uploaders match what the
 app shows — not just raw platform data.
 
-both consumers are verified against the same live fixtures:
-`web/api` runs `tests/e2e` (3 shards) and `mobile` runs `.maestro/`, using
-identical URLs from `web/api/tests/e2e/cases.json` and
-`mobile/.maestro/e2e-cases.json`. `getRouteName(url)` returns the stable
-platform id behind both, so metrics and labelling stay consistent — add a
-platform to `ROUTES` and it is routed, labelled and gated in both targets.
+`getRouteName(url)` returns the stable platform id from `ROUTES`. Both
+consumers use it for metrics and labelling, and both run live e2e against
+the same fixtures (`web/api/tests/e2e/cases.json`,
+`mobile/.maestro/e2e-cases.json`), so adding a platform to `ROUTES` routes,
+labels and gates it in both.
 
 for URLs you don't want to route by hand, `resolve(url)` picks the right
 extractor by host and calls `getInfo` in one step; `getExtractor(url)` gives

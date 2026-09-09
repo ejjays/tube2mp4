@@ -51,34 +51,24 @@ Phantom downloads 4K+ video and audio. It pushes heavy media work onto your devi
 
 ## Supported platforms
 
-| Platform    | Web | Mobile | Video | Audio | Images | Web e2e | Notes                                      |
-| ----------- | :-: | :----: | :---: | :---: | :----: | :-----: | ------------------------------------------ |
-| YouTube     | ✅  |   ✅   |  ✅   |  ✅   |   ➖   |   🔶    | playlists, shorts, 4K                      |
-| Spotify     | ✅  |   ✅   |  ✅   |  ✅   |   ➖   |   🔶    | tracks & albums resolve via youtube search |
-| SoundCloud  | ✅  |   ✅   |  ➖   |  ✅   |   ➖   |   ✅    | audio-only service                         |
-| Bilibili    | ✅  |   ✅   |  ✅   |  ✅   |   ➖   |   🔶    | some videos need a cookie                  |
-| TikTok      | ✅  |   ✅   |  ✅   |  ✅   |   ✅   |   ✅    | videos + photo carousels                   |
-| Instagram   | ✅  |   ✅   |  ✅   |  ✅   |   ✅   |   🔶    | reels, posts, needs a cookie in CI         |
-| Facebook    | ✅  |   ✅   |  ✅   |  ✅   |   ✅   |   ✅    | public posts only                          |
-| Threads     | ✅  |   ✅   |  ✅   |  ✅   |   ✅   |   ✅    |                                            |
-| X / Twitter | ✅  |   ✅   |  ✅   |  ✅   |   ➖   |   ✅    | videos & gifs only                         |
-| Bluesky     | ✅  |   ✅   |  ✅   |  ❌   |   ➖   |   ✅    | hls only, no audio                         |
-| Vimeo       | ✅  |   ✅   |  ✅   |  ❌   |   ➖   |   ✅    | hls only, no audio                         |
-| Dailymotion | ✅  |   ✅   |  ✅   |  ❌   |   ➖   |   ✅    | hls only, no audio                         |
-| Reddit      | ✅  |   ✅   |  ✅   |  ✅   |   ➖   |   ⚠️    | extractor unit-tested; live e2e unverified |
-| Pinterest   | ✅  |   ✅   |  ✅   |  ✅   |   ✅   |   ✅    | video pins + photos                        |
-| Twitch      | ✅  |   ✅   |  ✅   |  ❌   |   ➖   |   ✅    | clips, hls only                            |
-| Snapchat    | ✅  |   ✅   |  ✅   |  ✅   |   ➖   |   ✅    | spotlight videos + t.snapchat.com shorts   |
-
-**Web e2e** is the live-network probe in `web/api/tests/e2e` (3 shards, `tier=all`), mirroring
-`mobile/.maestro/` and using the same fixture URLs.
-
-- ✅ passes live
-- 🔶 passes, but the case allows an empty format list (`minFormats: 0`) — youtube and spotify
-  resolve out-of-process, bilibili is cookie-gated, instagram needs `IG_COOKIE` in CI
-- ⚠️ reddit's extractor passes its unit tests, but no live URL has passed in CI: the fixture is
-  NSFW-gated (`Account authentication is required`) and a second public URL also failed from the
-  runner, so reddit is **not** verified end-to-end on either target yet
+| Platform    | Web | Mobile | Video | Audio | Images | Notes                                      |
+| ----------- | :-: | :----: | :---: | :---: | :----: | ------------------------------------------ |
+| YouTube     | ✅  |   ✅   |  ✅   |  ✅   |   ➖   | playlists, shorts, 4K                      |
+| Spotify     | ✅  |   ✅   |  ✅   |  ✅   |   ➖   | tracks & albums resolve via youtube search |
+| SoundCloud  | ✅  |   ✅   |  ➖   |  ✅   |   ➖   | audio-only service                         |
+| Bilibili    | ✅  |   ✅   |  ✅   |  ✅   |   ➖   | some videos need a cookie                  |
+| TikTok      | ✅  |   ✅   |  ✅   |  ✅   |   ✅   | videos + photo carousels                   |
+| Instagram   | ✅  |   ✅   |  ✅   |  ✅   |   ✅   | reels, posts, multi-image picker           |
+| Facebook    | ✅  |   ✅   |  ✅   |  ✅   |   ✅   | public posts only                          |
+| Threads     | ✅  |   ✅   |  ✅   |  ✅   |   ✅   |                                            |
+| X / Twitter | ✅  |   ✅   |  ✅   |  ✅   |   ➖   | videos & gifs only                         |
+| Bluesky     | ✅  |   ✅   |  ✅   |  ❌   |   ➖   | hls only, no audio                         |
+| Vimeo       | ✅  |   ✅   |  ✅   |  ❌   |   ➖   | hls only, no audio                         |
+| Dailymotion | ✅  |   ✅   |  ✅   |  ❌   |   ➖   | hls only, no audio                         |
+| Reddit      | ✅  |   ✅   |  ✅   |  ✅   |   ➖   |                                            |
+| Pinterest   | ✅  |   ✅   |  ✅   |  ✅   |   ✅   | video pins + photos                        |
+| Twitch      | ✅  |   ✅   |  ✅   |  ❌   |   ➖   | clips, hls only                            |
+| Snapchat    | ✅  |   ✅   |  ✅   |  ✅   |   ➖   | spotlight videos + t.snapchat.com shorts   |
 
 ---
 
