@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "include": ["dependencies", "unlisted", "unresolved", "binaries"],
-  "ignoreBinaries": ["ffmpeg", "yt-dlp", "kaggle"],
+  "ignoreBinaries": ["ffmpeg", "yt-dlp"],
   // web/site is an astro project; knip can't trace .astro entry points,
   // the runtime --require ./userland-shim.cjs (preview script) or the
   // postinstall scripts/binding-fix.mjs. Excluded intentionally rather
@@ -10,9 +10,10 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/*.mjs"],
-      // scripts require.resolve('typescript7/package.json') to locate its
-      // bin (ts7's exports map hides bin/); not a real dependency edge
-      "ignoreDependencies": ["typescript7/package.json"],
+      // scripts/*.mjs require.resolve('typescript7/package.json') to find its
+      // bin (ts7's exports map hides bin/). Not a real dependency edge, and
+      // it's an "unlisted" finding, which has no dedicated ignore key.
+      "ignoreIssues": ["typescript7/package.json"],
     },
     "packages/extractors": {},
     "packages/web-mux": {},
@@ -28,11 +29,10 @@
       ],
     },
     "web/app": {
-      "entry": ["src/main.tsx"],
+      "entry": ["src/main.tsx", "tests/**/*.test.ts", "tests/**/*.test.tsx", "playwright.config.ts"],
       "vite": false,
       "vitest": false,
       "ignoreDependencies": [
-        "@playwright/test",
         "@testing-library/jest-dom",
         // test-only: knip's vitest plugin is off, so these look unused
         "@testing-library/dom",
