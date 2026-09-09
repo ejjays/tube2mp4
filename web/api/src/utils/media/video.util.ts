@@ -3,6 +3,7 @@ import { logger } from '../infra/logger.util.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isHost } from '../network/host.util.js';
+import { getRouteName } from '@phantom/extractors';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,22 +37,43 @@ export const normalizeUrl = (url: string): string => {
   return normalized;
 };
 
+// display-name overrides where it differs from the package route id
+const SERVICE_LABELS: Record<string, string> = {
+  youtube: 'YouTube',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  spotify: 'Spotify',
+  soundcloud: 'SoundCloud',
+  bilibili: 'Bilibili',
+  x: 'X',
+  threads: 'Threads',
+  dailymotion: 'Dailymotion',
+  bluesky: 'Bluesky',
+  pinterest: 'Pinterest',
+  reddit: 'Reddit',
+  snapchat: 'Snapchat',
+  twitch: 'Twitch',
+  vimeo: 'Vimeo',
+};
+
+/**
+ * Platform label for logging, metrics and cookie selection. Falls back to the
+ * shared package's route id (title-cased) so new platforms get a sensible
+ * name without another host list here.
+ */
 export const detectService = (url: string): string => {
   const normalized = url.toLowerCase();
   if (isHost(normalized, 'youtube.com') || isHost(normalized, 'youtu.be'))
     return 'YouTube';
-  if (isHost(normalized, 'facebook.com') || isHost(normalized, 'fb.watch'))
-    return 'Facebook';
-  if (isHost(normalized, 'instagram.com')) return 'Instagram';
-  if (isHost(normalized, 'tiktok.com')) return 'TikTok';
   if (isHost(normalized, 'spotify.com')) return 'Spotify';
-  if (isHost(normalized, 'soundcloud.com')) return 'SoundCloud';
-  if (
-    isHost(normalized, 'bilibili.tv') ||
-    isHost(normalized, 'biliintl.com') ||
-    isHost(normalized, 'bili.im')
-  )
-    return 'Bilibili';
+
+  const route = getRouteName(normalized);
+  if (route) {
+    return (
+      SERVICE_LABELS[route] ?? route.charAt(0).toUpperCase() + route.slice(1)
+    );
+  }
   return 'Generic';
 };
 

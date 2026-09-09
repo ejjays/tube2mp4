@@ -1,39 +1,45 @@
 import { URL } from 'node:url';
+import { getRouteName } from '@phantom/extractors';
 import { logger } from '../infra/logger.util.js';
 
-const SUPPORTED_DOMAINS: string[] = [
-  'youtube.com',
-  'youtu.be',
-  'spotify.com',
-  'open.spotify.com',
-  'facebook.com',
-  'fb.watch',
-  'instagram.com',
-  'threads.net',
-  'threads.com',
-  'tiktok.com',
-  'twitter.com',
-  'x.com',
-  'soundcloud.com',
-  'reddit.com',
-  'bsky.app',
-  'bilibili.tv',
-  'biliintl.com',
-  'bili.im',
-  'vimeo.com',
-];
+// platforms resolved locally in web/api rather than by the shared package.
+// youtube needs youtubei.js + PO-token, spotify needs the brain registry —
+// neither can live in the dependency-free package.
+const LOCAL_PLATFORMS: Record<string, string[]> = {
+  youtube: ['youtube.com', 'youtu.be'],
+  spotify: ['spotify.com', 'open.spotify.com'],
+};
 
-export function isSupportedUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
+function isLocalPlatform(url: string): boolean {
+  let hostname: string;
   try {
-    const parsed = new URL(url);
-    return SUPPORTED_DOMAINS.some(
-      (domain) =>
-        parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
-    );
+    hostname = new URL(url).hostname.toLowerCase();
   } catch {
     return false;
   }
+  return Object.values(LOCAL_PLATFORMS).some((domains) =>
+    domains.some(
+      (domain) => hostname === domain || hostname.endsWith(`.${domain}`)
+    )
+  );
+}
+
+/**
+ * Gate for /info and the download routes. Sources the platform list from the
+ * shared package registry so it can't drift: adding a platform to
+ * packages/extractors ROUTES makes it reachable over HTTP with no change
+ * here. A hand-maintained domain list previously omitted dailymotion,
+ * pinterest, snapchat and twitch — the extractors worked, but the API
+ * rejected them with "No valid URL provided".
+ */
+export function isSupportedUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    new URL(url);
+  } catch {
+    return false;
+  }
+  return getRouteName(url) !== null || isLocalPlatform(url);
 }
 
 export function isValidSpotifyUrl(url: string | null | undefined): boolean {
