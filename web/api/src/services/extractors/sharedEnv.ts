@@ -25,11 +25,47 @@ function streamUrl(
   );
 }
 
+/**
+ * Vimeo falls back to these when the config payload has no thumb. Without
+ * them the HLS/progressive path returns no thumbnail at all, and the
+ * metascraper partial used to mask that by supplying meta.image.
+ * Mirrors mobile's mobileSharedEnvWithThumbs.
+ */
+async function oembedThumbImpl(url: string): Promise<string | undefined> {
+  try {
+    const res = await secureFetch(
+      `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`
+    );
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { thumbnail_url?: string };
+    return data.thumbnail_url;
+  } catch {
+    return undefined;
+  }
+}
+
+async function ogImageThumbImpl(url: string): Promise<string | undefined> {
+  try {
+    const res = await secureFetch(url);
+    if (!res.ok) return undefined;
+    const html = await res.text();
+    const match =
+      /<meta[^>]+(?:property|name)=["']og:image["'][^>]+content=["']([^"']+)["']/iu.exec(
+        html
+      );
+    return match?.[1]?.replace(/&amp;/gu, '&') ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const sharedBackendEnv: ExtractorEnv = {
   fetch: secureFetch as unknown as typeof fetch,
   streamUrl,
   remuxHls,
   skipDurationFetch: true,
+  oembedThumb: oembedThumbImpl,
+  ogImageThumb: ogImageThumbImpl,
   get cookie() {
     return process.env.BILIBILI_COOKIE?.trim() || undefined;
   },

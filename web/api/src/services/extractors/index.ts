@@ -290,6 +290,9 @@ export async function getInfo(
     ) {
       if (!settled.data.thumbnail) {
         settled.data.metascraper = { image: meta.image };
+        // the partial used to supply meta.image; keep that behaviour now
+        // that the JS result wins, so callers still see a thumbnail
+        if (meta.image) settled.data.thumbnail = meta.image;
       }
       return settled.data as VideoInfo;
     }
