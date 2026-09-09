@@ -116,5 +116,62 @@
       "wantThumb": true,
       "wantResolution": true
     }
+  },
+  {
+    "id": "dailymotion",
+    "tier": "solid",
+    "url": "https://www.dailymotion.com/video/x9b5fti",
+    "expect": {
+      "minFormats": 1,
+      "mediaKind": "video",
+      "wantThumb": true,
+      "wantResolution": true,
+      "expectAuthor": "MR BEAST"
+    }
+  },
+  {
+    "id": "pinterest",
+    "tier": "solid",
+    "url": "https://www.pinterest.com/pin/424605071145308338/",
+    "expect": {
+      "minFormats": 1,
+      "mediaKind": "video",
+      "wantThumb": true
+    }
+  },
+  {
+    "id": "reddit",
+    "tier": "soft",
+    "url": "https://www.reddit.com/r/nextfuckinglevel/comments/1ul35f8/a_freediver_exploring_the_worlds_deepest_swimming/",
+    "expect": {
+      "minFormats": 1,
+      "mediaKind": "video",
+      "wantThumb": true
+    }
+  },
+  {
+    "id": "snapchat",
+    "tier": "solid",
+    "url": "https://www.snapchat.com/spotlight/W7_EDlXWTBiXAEEniNoMPwAAYYWtidGhudGZpAX1TKn0JAX1TKnXJAAAAAA",
+    "expect": {
+      "minFormats": 1,
+      "mediaKind": "video",
+      "wantThumb": true,
+      "wantResolution": false,
+      "wantFilesize": true,
+      "allowPlatformUploader": true
+    }
+  },
+  {
+    "id": "twitch",
+    "tier": "solid",
+    "url": "https://www.twitch.tv/squeex/clip/ProtectivePoorMoonShazBotstix-tukvl4Y1Y4Kh_wEc",
+    "expect": {
+      "minFormats": 2,
+      "mediaKind": "video",
+      "wantThumb": true,
+      "wantResolution": true,
+      "wantFilesize": true
+    }
   }
 ]
