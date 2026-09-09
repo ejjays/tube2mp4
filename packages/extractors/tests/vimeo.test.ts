@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createVimeoExtractor } from '../src/vimeo.js';
-import type { ExtractorEnv } from '../src/env.js';
+import type { ExtractorEnv } from '../src/shared/env.js';
 
 const PROGRESSIVE = [
   { quality: '360p', width: 640, height: 360, url: 'https://vod.vimeocdn.com/360.mp4' },

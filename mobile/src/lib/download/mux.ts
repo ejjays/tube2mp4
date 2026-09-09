@@ -9,19 +9,23 @@ import { downloadPlaylistToFile } from './hls';
 import { DESKTOP_UA } from '../userAgents';
 import { log, warn as logWarn } from '../log';
 
-// ffmpeg-kit logs at verbose by default; only keep errors
+// ffmpeg-kit verbose by default → keep errors only & silence upstream Loading log
+const _origLog = console.log.bind(console);
+console.log = (...args: unknown[]) => {
+  const first = typeof args[0] === 'string' ? args[0] : '';
+  if (first.includes('ffmpeg-kit-react-native')) return;
+  _origLog(...(args as []));
+};
 void FFmpegKitConfig.setLogLevel(Level.AV_LOG_ERROR);
 
 function fsPath(uri: string): string {
   return decodeURIComponent(uri.replace(/^file:\/\//u, ''));
 }
 
-// large segments saturate at 8
+// hls concurrency: large 8, muxed 16
 const HLS_CONCURRENCY = 8;
-// tiny segments need more parallelism
 const MUXED_HLS_CONCURRENCY = 16;
 
-/* video+audio -> one container, no re-encode */
 export async function muxVideoAudio(
   video: File,
   audio: File,
@@ -44,7 +48,6 @@ export async function muxVideoAudio(
   return false;
 }
 
-/* pull the audio track out of a muxed file, no re-encode (lossless, ~instant) */
 export async function demuxToM4a(src: File, out: File): Promise<boolean> {
   const cmd = `-hide_banner -loglevel error -y -i "${fsPath(src.uri)}" -vn -c:a copy -movflags +faststart "${fsPath(out.uri)}"`;
   const session = await FFmpegKit.execute(cmd);
@@ -59,7 +62,6 @@ export async function demuxToM4a(src: File, out: File): Promise<boolean> {
   return false;
 }
 
-/* still frame for media without page art; retries frame 0 on seek miss */
 export async function extractFrame(src: File, out: File): Promise<boolean> {
   const base = `-hide_banner -loglevel error -y -i "${fsPath(src.uri)}"`;
   for (const seek of ['-ss 1', '']) {
@@ -71,7 +73,6 @@ export async function extractFrame(src: File, out: File): Promise<boolean> {
   return false;
 }
 
-/* container swap only; fails when codecs aren't mp4-compatible (vp9/opus…) */
 export async function encodeToMp4(src: File, out: File): Promise<boolean> {
   const cmd = `-hide_banner -loglevel error -y -i "${fsPath(src.uri)}" -c:v libx264 -preset veryfast -crf 23 -c:a aac -movflags +faststart "${fsPath(out.uri)}"`;
   const session = await FFmpegKit.execute(cmd);
@@ -85,7 +86,6 @@ export async function encodeToMp4(src: File, out: File): Promise<boolean> {
   return false;
 }
 
-/* container compatibility, not extra quality */
 export async function transcodeToMp3(src: File, out: File): Promise<boolean> {
   const cmd = `-hide_banner -loglevel error -y -i "${fsPath(src.uri)}" -vn -c:a libmp3lame -q:a 2 "${fsPath(out.uri)}"`;
   const session = await FFmpegKit.execute(cmd);
@@ -100,7 +100,7 @@ export async function transcodeToMp3(src: File, out: File): Promise<boolean> {
   return false;
 }
 
-// args form avoids shell-escaping metadata values
+// args form avoids shell-escaping metadata
 export async function tagAudio(
   audio: File,
   out: File,
@@ -140,7 +140,6 @@ export async function tagAudio(
 
 const HLS_UA = DESKTOP_UA;
 
-/* hls playlist -> one mp4, no re-encode; optional separate audio playlist */
 export function hlsToMp4(
   url: string,
   out: File,
@@ -149,11 +148,10 @@ export function hlsToMp4(
   audioUrl?: string,
   keepAlive?: boolean
 ): Promise<boolean> {
-  // vimeo splits video & audio playlists; map both when present
+  // vimeo splits video/audio; persistent 0 avoids cross-host stall
   const inputs = audioUrl
     ? `-i "${url}" -i "${audioUrl}" -map 0:v:0 -map 1:a:0`
     : `-i "${url}"`;
-  // reuse connection on same-host segments; off avoids cross-host redirect stalls
   const persistent = keepAlive ? '1' : '0';
   const cmd = `-hide_banner -loglevel error -y -http_persistent ${persistent} -user_agent "${HLS_UA}" ${inputs} -c copy -bsf:a aac_adtstoasc -movflags +faststart "${fsPath(out.uri)}"`;
   return new Promise((resolve) => {
@@ -183,7 +181,6 @@ export function hlsToMp4(
   });
 }
 
-/* parallel video+audio fetch, then -c copy mux */
 export async function parallelHlsToMp4(
   videoPlaylist: string,
   audioPlaylist: string,
@@ -232,7 +229,6 @@ export async function parallelHlsToMp4(
   }
 }
 
-// remux concatenated segments -> clean mp4, no re-encode
 export async function remuxToMp4(src: File, out: File): Promise<boolean> {
   const cmd = `-hide_banner -loglevel error -y -i "${fsPath(src.uri)}" -c copy -movflags +faststart "${fsPath(out.uri)}"`;
   const session = await FFmpegKit.execute(cmd);
@@ -246,7 +242,6 @@ export async function remuxToMp4(src: File, out: File): Promise<boolean> {
   return false;
 }
 
-// muxed single playlist -> parallel segment fetch + one remux (skips serial ffmpeg)
 export async function parallelHlsMuxedToMp4(
   playlist: string,
   out: File,

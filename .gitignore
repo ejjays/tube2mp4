@@ -44,12 +44,12 @@ ci.md
 # large files and test scripts
 *.webm
 *.mp4
-web/backend/debug_*.js
-web/backend/test_*.js
-web/backend/test_*.html
-web/frontend/public/ffmpeg-core/
-web/frontend/public/libav/
-web/backend/test-results.xml
+web/api/debug_*.js
+web/api/test_*.js
+web/api/test_*.html
+web/app/public/ffmpeg-core/
+web/app/public/libav/
+web/api/test-results.xml
 mobile/test-results.xml
 packages/extractors/test-results.xml
 scripts/eslint-plugin-nexstream.js
@@ -57,28 +57,28 @@ scripts/setup/restore.sh
 scripts/setup
 BTC-ISMIR19/
 tube-extractor/
-web/backend/coverage/
-web/backend/ci-results/
+web/api/coverage/
+web/api/ci-results/
 temp.xml
 bin
 
 
 # sensitive cookies and secrets
 .env
-web/frontend/.env
-web/backend/.env
-web/backend/youtube_cookies.txt
-web/backend/facebook_cookies.txt
-web/backend/temp_cookies.txt
+web/app/.env
+web/api/.env
+web/api/youtube_cookies.txt
+web/api/facebook_cookies.txt
+web/api/temp_cookies.txt
 scripts/ngrok
 engine-core-v1/
 temp_refs/
 temp_refs2/
 __pycache__/
 dump.rdb
-web/backend/server.err
+web/api/server.err
 nexstream.xml
-web/backend/deno-wrapper
+web/api/deno-wrapper
 *.mp4
 *.mp3
 # site hero demo video is required content

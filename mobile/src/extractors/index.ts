@@ -1,40 +1,36 @@
-import { VideoInfo, Format, ExtractorError } from './shared/types';
-import { getInfo as facebookGetInfo } from './facebook';
-import { getInfo as tiktokGetInfo } from './tiktok';
-import { getInfo as threadsGetInfo } from './threads';
+import {
+  VideoInfo,
+  Format,
+  ExtractorError,
+  getExtractor as pkgGetExtractor,
+  createBilibiliExtractor,
+  hostOf,
+  matchesDomain,
+} from '@phantom/extractors';
 import { getInfo as youtubeGetInfo } from './youtube';
-import { getInfo as bilibiliGetInfo } from './bilibili';
 import { getInfo as instagramGetInfo } from './instagram';
 import { getInfo as spotifyGetInfo } from './spotify';
 import { getInfo as soundcloudGetInfo } from './soundcloud';
-import { getInfo as redditGetInfo } from './reddit';
-import { getInfo as dailymotionGetInfo } from './dailymotion';
-import { getInfo as pinterestGetInfo } from './pinterest';
-import { getInfo as twitchGetInfo } from './twitch';
-import { getInfo as snapchatGetInfo } from './snapchat';
 import { getCachedInfo, setCachedInfo } from '../lib/cache';
 import { reportError } from '../lib/crash';
 import { log } from '../lib/log';
 import { mapLimit } from '../lib/net';
 import { getGenericSnifferEnabled } from '../lib/settings';
+import { getBilibiliCookie } from '../lib/settings';
 import { extractFromPage } from '../lib/webviewExtraction/host';
 import { pageScanToVideoInfo } from '../lib/webviewExtraction/normalize';
 import { probeFileSize } from './shared/utils';
-import { getExtractor as pkgGetExtractor } from '@phantom/extractors';
-import { mobileSharedEnvWithThumbs } from './sharedEnv';
+import { mobileSharedEnvWithThumbs } from './shared/env';
 
 export type OnPartial = (info: VideoInfo) => void;
 
-function hostOf(url: string): string {
-  const cleaned = url.replace(/^https?:\/\//iu, '');
-  return cleaned.split(/[/?#]/u)[0].toLowerCase();
-}
+const matches = matchesDomain;
 
-function matches(host: string, domain: string): boolean {
-  return host === domain || host.endsWith(`.${domain}`);
-}
-
-function dispatch(
+// only these keep on-device paths — WebView BotGuard (youtube), native
+// login (instagram), isrc/drm fallbacks (spotify, soundcloud) and the
+// cookie-injected bilibili client. everything else comes from the shared
+// package registry, so a new platform added there works here for free.
+async function dispatch(
   host: string,
   url: string,
   onPartial?: OnPartial
@@ -47,60 +43,30 @@ function dispatch(
     return spotifyGetInfo(url, onPartial);
   }
 
-  if (
-    matches(host, 'bilibili.tv') ||
-    matches(host, 'biliintl.com') ||
-    matches(host, 'bili.im')
-  ) {
-    return bilibiliGetInfo(url);
-  }
-
-  if (matches(host, 'tiktok.com')) {
-    return tiktokGetInfo(url);
+  if (matches(host, 'soundcloud.com')) {
+    return soundcloudGetInfo(url, onPartial);
   }
 
   if (matches(host, 'instagram.com')) {
     return instagramGetInfo(url);
   }
 
-  if (matches(host, 'threads.net') || matches(host, 'threads.com')) {
-    return threadsGetInfo(url);
-  }
-
   if (
-    matches(host, 'facebook.com') ||
-    matches(host, 'fb.watch') ||
-    matches(host, 'fb.com')
+    matches(host, 'bilibili.tv') ||
+    matches(host, 'biliintl.com') ||
+    matches(host, 'bili.im')
   ) {
-    return facebookGetInfo(url, onPartial);
-  }
-
-  if (matches(host, 'soundcloud.com')) {
-    return soundcloudGetInfo(url, onPartial);
-  }
-
-  // shared pkg handles reddit/dailymotion/pinterest/twitch/snapchat
-  // but keep explicit imports for typed error + single source
-  if (matches(host, 'reddit.com') || matches(host, 'redd.it')) {
-    return redditGetInfo(url);
-  }
-  if (matches(host, 'dailymotion.com') || matches(host, 'dai.ly')) {
-    return dailymotionGetInfo(url);
-  }
-  if (matches(host, 'pin.it') || /(?:^|\.)pinterest\.(?:[a-z]{2,4}|com?\.[a-z]{2})$/u.test(host)) {
-    return pinterestGetInfo(url);
-  }
-  if (matches(host, 'twitch.tv') || matches(host, 'clip.twitch.tv')) {
-    return twitchGetInfo(url, onPartial as unknown as never);
-  }
-  if (matches(host, 'snapchat.com') || matches(host, 't.snapchat.com') || matches(host, 'story.snapchat.com')) {
-    return snapchatGetInfo(url);
+    const cookie = await getBilibiliCookie();
+    const env = cookie
+      ? { ...mobileSharedEnvWithThumbs, cookie }
+      : mobileSharedEnvWithThumbs;
+    return createBilibiliExtractor(env).getInfo(url);
   }
 
   const pkg = pkgGetExtractor(url, mobileSharedEnvWithThumbs);
-  if (pkg) return pkg.getInfo(url) as Promise<VideoInfo | null>;
+  if (pkg) return pkg.getInfo(url, onPartial ? { onPartial } : {});
 
-  return Promise.resolve(null);
+  return null;
 }
 
 const FAST_RESOLVE_DISABLED =

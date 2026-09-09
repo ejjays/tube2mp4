@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "include": ["dependencies", "unlisted", "unresolved", "binaries"],
-  "ignoreBinaries": ["ffmpeg", "yt-dlp", "kaggle"],
+  "ignoreBinaries": ["ffmpeg", "yt-dlp"],
   // web/site is an astro project; knip can't trace .astro entry points,
   // the runtime --require ./userland-shim.cjs (preview script) or the
   // postinstall scripts/binding-fix.mjs. Excluded intentionally rather
@@ -9,32 +9,36 @@
   "ignoreWorkspaces": ["web/site"],
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.mjs"]
+      "entry": ["scripts/*.mjs"],
     },
     "packages/extractors": {},
     "packages/web-mux": {},
-    "web/backend": {
-      "vite": false,
-      "vitest": false,
-      "ignoreDependencies": ["pino-pretty"]
-    },
-    "web/frontend": {
-      "entry": ["src/main.tsx"],
+    "web/api": {
       "vite": false,
       "vitest": false,
       "ignoreDependencies": [
-        "@playwright/test",
+        "pino-pretty",
+        // imported only by tests/e2e/browser.e2e.test.ts, which knip's
+        // default entry tracing doesn't reach
+        "puppeteer-core",
+        "playwright-core",
+      ],
+    },
+    "web/app": {
+      "entry": ["src/main.tsx", "tests/**/*.test.ts", "tests/**/*.test.tsx"],
+      "vite": false,
+      "vitest": false,
+      "ignoreDependencies": [
         "@testing-library/jest-dom",
-        "@types/styled-components",
         "@vitejs/plugin-react",
-        "vite-plugin-sitemap"
-      ]
+        "vite-plugin-sitemap",
+      ],
     },
     "mobile": {
       "entry": [
         "tests/**/*.test.{ts,tsx}",
         "supabase/functions/**/index.ts",
-        "plugins/*.js"
+        "plugins/*.js",
       ],
       "ignore": ["vitest.config.ts"],
       "ignoreDependencies": [
@@ -44,10 +48,10 @@
         "expo-status-bar",
         "expo-updates",
         "expo-blur",
-        "expo-video"
+        "expo-video",
       ],
       "vitest": false,
-      "expo": false
-    }
-  }
+      "expo": false,
+    },
+  },
 }

@@ -1,4 +1,4 @@
-// runs against dist/, not src/ — same fixture as web/backend's x_extractor.test.ts
+// runs against dist/, not src/ — same fixture as web/api's x_extractor.test.ts
 import { createXExtractor } from '../dist/index.js';
 import type { ExtractorEnv } from '../dist/index.js';
 
@@ -66,14 +66,15 @@ const mockEnv: ExtractorEnv = {
 
 const x = createXExtractor(mockEnv);
 
-const info = await x.getInfo(
-  'https://x.com/testuser/status/123456?s=20'
-);
+const info = await x.getInfo('https://x.com/testuser/status/123456?s=20');
 if (!info) throw new Error('expected info, got null');
 
 const assertions: Array<[string, boolean]> = [
   ['2 mp4 formats (HLS filtered out)', info.formats.length === 2],
-  ['formats sorted 720p, 320p', info.formats.map((f) => f.quality).join(',') === '720p,320p'],
+  [
+    'formats sorted 720p, 320p',
+    info.formats.map((f) => f.quality).join(',') === '720p,320p',
+  ],
   ['t.co link stripped from title', info.title === 'lol check this'],
   ['uploader resolved', info.uploader === 'Test User'],
   ['filesize backfilled from HEAD', info.formats[0].filesize === 5000000],
@@ -88,7 +89,9 @@ for (const [label, pass] of assertions) {
 }
 
 const stream = await x.getStream(info, { formatId: '320p' });
-console.log(`\nPASS  getStream() resolved a ReadableStream: ${stream instanceof ReadableStream}`);
+console.log(
+  `\nPASS  getStream() resolved a ReadableStream: ${stream instanceof ReadableStream}`
+);
 
 if (failed) {
   process.exitCode = 1;

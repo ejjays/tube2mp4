@@ -7,14 +7,14 @@ BASE_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 NGROK_BIN="$SCRIPT_DIR/ngrok"
 
 # load env
-if [ -f "$BASE_DIR/web/backend/.env" ]; then
+if [ -f "$BASE_DIR/web/api/.env" ]; then
     while IFS='=' read -r k v || [ -n "$k" ]; do
         case "$k" in ''|\#*) continue ;; esac
         v="${v%$'\r'}"
         v="${v#\"}"; v="${v%\"}"
         v="${v#\'}"; v="${v%\'}"
         export "$k=$v"
-    done < "$BASE_DIR/web/backend/.env"
+    done < "$BASE_DIR/web/api/.env"
 fi
 
 # setup DB
@@ -30,10 +30,10 @@ echo "starting backend..."
 command -v termux-chroot >/dev/null || pkg install proot -y
 
 if command -v pm2 >/dev/null; then
-    pm2 restart nexstream-api --silent >/dev/null 2>&1 || (cd "$BASE_DIR/backend" && pm2 start src/app.js --name nexstream-api --silent >/dev/null 2>&1)
+    pm2 restart nexstream-api --silent >/dev/null 2>&1 || (cd "$BASE_DIR/web/api" && pm2 start src/app.js --name nexstream-api --silent >/dev/null 2>&1)
 else
     pkill -f "node src/app.js"
-    cd "$BASE_DIR/backend" && node src/app.js >/dev/null 2>&1 &
+    cd "$BASE_DIR/web/api" && node src/app.js >/dev/null 2>&1 &
 fi
 
 echo "starting ngrok..."

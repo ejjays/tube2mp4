@@ -3,7 +3,7 @@ import {
   normalizeArtist,
   normalizeTitle,
   type RawSocialData,
-} from '../src/extractors/shared/utils';
+} from '@phantom/extractors';
 
 describe('normalizeArtist', () => {
   it.each<[string, RawSocialData, string]>([

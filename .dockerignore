@@ -10,7 +10,7 @@ backend/*cookies*.txt
 
 # unused by the backend image
 .git
-frontend
+app
 mobile
 engine
 temp_refs

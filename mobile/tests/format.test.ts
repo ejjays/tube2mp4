@@ -15,7 +15,7 @@ import {
   buildAudioOptions,
 } from '../src/lib/format';
 import { formatName } from '../src/lib/settings';
-import type { Format, VideoInfo } from '../src/extractors/shared/types';
+import type { Format, VideoInfo } from '@phantom/extractors';
 
 const makeInfo = (formats: Format[]): VideoInfo => ({
   type: 'video',

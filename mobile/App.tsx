@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { View, StatusBar, InteractionManager, AppState } from 'react-native';
+import { View, StatusBar, AppState, LogBox } from 'react-native';
 import { useBackHandler } from './src/lib/back';
 import {
   SafeAreaProvider,
@@ -18,11 +18,15 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import UpdatesScreen from './src/screens/UpdatesScreen';
 import DownloadsScreen from './src/screens/DownloadsScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
-import PlaylistScreen from './src/screens/PlaylistScreen';
+import PlaylistPanel from './src/components/PlaylistPanel';
 import { type DownloadMode } from './src/components/FormatBar';
 import { resolve } from './src/extractors';
 import { prewarmClientId } from './src/extractors/soundcloud';
-import { Format, VideoInfo, ExtractorError } from './src/extractors/shared/types';
+import {
+  Format,
+  VideoInfo,
+  ExtractorError,
+} from '@phantom/extractors';
 import PickerModal from './src/components/PickerModal';
 import SpotifyPickerModal from './src/components/SpotifyPickerModal';
 import NotificationPermissionSheet from './src/components/sheets/NotificationPermissionSheet';
@@ -57,6 +61,25 @@ import RubikRegular from './assets/fonts/Rubik-Regular.ttf';
 import RubikMedium from './assets/fonts/Rubik-Medium.ttf';
 import RubikSemiBold from './assets/fonts/Rubik-SemiBold.ttf';
 import RubikBold from './assets/fonts/Rubik-Bold.ttf';
+
+LogBox.ignoreLogs([/\[Reanimated\].*LayoutMetrics/iu]);
+
+function scheduleIdle(fn: () => void): () => void {
+  const scope = globalThis as unknown as {
+    requestIdleCallback?: (
+      cb: () => void,
+      opts?: { timeout: number }
+    ) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (typeof scope.requestIdleCallback === 'function') {
+    const id = scope.requestIdleCallback(fn, { timeout: 800 });
+    return () => scope.cancelIdleCallback?.(id);
+  }
+  const t = setTimeout(fn, 0);
+  return () => clearTimeout(t);
+}
+
 const queryClient = new QueryClient();
 void SplashScreen.preventAutoHideAsync();
 function cleanUrl(raw: string): string {
@@ -120,7 +143,7 @@ function AppRoot() {
   useEffect(() => {
     if (!greetPending) return undefined;
     if (notifPriming.visible) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- records sheet visit once shown
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sheet visit once
       setPrimingSeen(true);
       return undefined;
     }
@@ -182,24 +205,22 @@ function AppRoot() {
       unsubscribeSocial();
     };
   }, []);
-  useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() =>
-      setBgReady(true)
-    );
-    return () => task.cancel();
-  }, []);
-  // prewarm lazy tabs idle/invisible so first tap animates instantly (heavy work stays gated behind `visible`)
-  useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() =>
-      setVisited({ downloads: true, settings: true, updates: true })
-    );
-    return () => task.cancel();
-  }, []);
+  useEffect(() => scheduleIdle(() => setBgReady(true)), []);
+  // prewarm tabs idle → first tap instant, heavy work gated behind visible
+  useEffect(
+    () =>
+      scheduleIdle(() =>
+        setVisited({ downloads: true, settings: true, updates: true })
+      ),
+    []
+  );
   const handleResolve = async () => {
     if (!link.trim() || loading) return;
     tapImpact();
-    // tunnel check is prompt-only; resolve proceeds either way
-    void isVpnActive().then(setVpnWarning).catch(() => setVpnWarning(false));
+    // vpn check non-blocking
+    void isVpnActive()
+      .then(setVpnWarning)
+      .catch(() => setVpnWarning(false));
     const url = cleanUrl(link);
     dismissedRef.current = false;
     setLoading(true);
@@ -233,7 +254,9 @@ function AppRoot() {
             hasThumb: Boolean(result.thumbnail),
             formats: result.formats.length,
             anyFilesize: result.formats.some((f) => (f.filesize ?? 0) > 0),
-            anyResolution: result.formats.some((f) => Boolean(f.resolution || f.height)),
+            anyResolution: result.formats.some((f) =>
+              Boolean(f.resolution || f.height)
+            ),
             audioOnly:
               result.formats.length > 0 &&
               result.formats.every((f) => !f.isVideo),
@@ -286,7 +309,7 @@ function AppRoot() {
       setVisited((v) => (v[next] ? v : { ...v, [next]: true }));
     }
   };
-  // lowest priority: walk the tab stack back, else home; home owns the exit dialog
+  // back: walk tab stack → home, home owns exit
   useBackHandler(() => {
     if (tabHistory.current.length > 0) {
       const prev = tabHistory.current[tabHistory.current.length - 1];
@@ -385,7 +408,7 @@ function AppRoot() {
                 hidden={navHidden || playlistOpen}
               />
               {playlistOpen && playlistInfo ? (
-                <PlaylistScreen
+                <PlaylistPanel
                   info={playlistInfo}
                   visible={playlistOpen}
                   onClose={handlePlaylistClose}

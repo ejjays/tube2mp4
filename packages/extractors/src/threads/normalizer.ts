@@ -1,6 +1,7 @@
-import { VideoInfo, Format } from '../types.js';
-import { normalizeTitle, normalizeArtist } from '../social.js';
+import { VideoInfo, Format } from '../shared/types.js';
+import { normalizeTitle, normalizeArtist } from '../shared/social.js';
 import { ThreadsParsed } from './types.js';
+import { buildVideoInfo } from '../shared/fetch.js';
 
 export function normalizeVideoInfo(
   url: string,
@@ -45,8 +46,7 @@ export function normalizeVideoInfo(
 
   if (formats.length === 0) return null;
 
-  const info: VideoInfo = {
-    type: 'video',
+  const info = buildVideoInfo({
     id: parsedData.id || url,
     title: parsedData.title || 'Threads Post',
     uploader: parsedData.uploader || 'Threads User',
@@ -54,12 +54,8 @@ export function normalizeVideoInfo(
     webpageUrl: url,
     formats,
     extractorKey: 'threads',
-    isJsInfo: true,
-    fromBrain: false,
-    isPartial: false,
-    isIsrcMatch: false,
     isFullData: false,
-  };
+  });
 
   if (parsedData.title) {
     info.metascraper = { title: parsedData.title };

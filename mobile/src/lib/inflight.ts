@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
-import type { Format, VideoInfo } from '../extractors/shared/types';
+import type { Format, VideoInfo } from '@phantom/extractors';
 
 const INFLIGHT_KEY = 'phantom.download.inflight';
 

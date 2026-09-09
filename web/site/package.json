@@ -17,7 +17,7 @@
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/rubik": "^5.3.0",
     "@lucide/astro": "^1.33.0",
-    "astro": "^7.2.4",
+    "astro": "^7.2.8",
     "embla-carousel-react": "^8.6.0",
     "embla-carousel-wheel-gestures": "^8.1.0",
     "framer-motion": "^13.0.0",

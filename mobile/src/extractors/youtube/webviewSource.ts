@@ -1,6 +1,6 @@
 /*
  * youtube "confirm 'not a bot" wall — read before going down this hole.
- * the trap: web/backend works while the app walls at the same time, same IP, so
+ * the trap: web/api works while the app walls at the same time, same IP, so
  * it looks mobile-only. it isnt — i diffed the app's exact request vs the
  * backend's & they're identical: same youtubei.js, ANDROID_VR client, 796 poToken,
  * same headers, same IP. the app just tripped it more (4 clients + retries, plus

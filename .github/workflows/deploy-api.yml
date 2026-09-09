@@ -1,0 +1,62 @@
+name: deploy api to oracle micro
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - web/api/**
+      - web/shared/**
+      - packages/extractors/**
+      - packages/web-mux/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/deploy-api.yml
+  workflow_dispatch:
+
+concurrency:
+  group: phantom-api-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Guard against platform-pinned bindings
+        run: bash scripts/guard-platform-bindings.sh
+
+      - name: install deps
+        run: npm ci
+
+      - name: build
+        run: |
+          npm run build -w web/shared
+          npx tsc -p packages/extractors
+          npm run build -w @phantom/web-mux
+          npm run build -w web/api
+
+      - name: deploy to vm
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          printf '%s\n' "$KEY" > deploy_key
+          chmod 600 deploy_key
+          printf '%s\n' "$KNOWN" > known_hosts
+          SSH="ssh -i $PWD/deploy_key -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PWD/known_hosts"
+          rsync -az --delete -e "$SSH" \
+            --include='dist/' --include='dist/**' --filter=':- .gitignore' --exclude='.env' \
+            --exclude web/app/ --exclude mobile/ \
+            ./ "$USER@$HOST:/home/ubuntu/nexstream/"
+          ssh -i "$PWD/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$PWD/known_hosts" "$USER@$HOST" 'cd /home/ubuntu/nexstream && npm install -w web/api -w web/shared -w @phantom/extractors -w @phantom/web-mux --omit=dev --ignore-scripts --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=60000 >/tmp/deploy-install.log 2>&1 && sudo systemctl restart nexstream-backend && sleep 12 && curl -sf http://localhost:5000/health >/dev/null && echo DEPLOY_OK'

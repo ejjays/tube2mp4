@@ -14,17 +14,17 @@ TUNNEL_FAILS=0
 
 termux-wake-lock 2>/dev/null || true
 
-# load creds from web/backend/.env
-if [ -f "$BASE_DIR/web/backend/.env" ]; then
+# load creds from web/api/.env
+if [ -f "$BASE_DIR/web/api/.env" ]; then
   while IFS='=' read -r k v || [ -n "$k" ]; do
     case "$k" in ''|\#*) continue ;; esac
     v="${v%$'\r'}"; v="${v#\"}"; v="${v%\"}"; v="${v#\'}"; v="${v%\'}"
     export "$k=$v"
-  done < "$BASE_DIR/web/backend/.env"
+  done < "$BASE_DIR/web/api/.env"
 fi
 
 if [ -z "$YTDLP_REMOTE_SECRET" ]; then
-  echo "[ytdlp-keepalive] FATAL: set YTDLP_REMOTE_SECRET in web/backend/.env"
+  echo "[ytdlp-keepalive] FATAL: set YTDLP_REMOTE_SECRET in web/api/.env"
   exit 1
 fi
 

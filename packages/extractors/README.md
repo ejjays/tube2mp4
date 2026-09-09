@@ -1,6 +1,6 @@
 # @phantom/extractors
 
-pulls the JS extractors out of `web/backend` into a standalone, dependency-free
+pulls the JS extractors out of `web/api` into a standalone, dependency-free
 package. it's the sibling to [`../web-mux`](../web-mux/README.md) — this
 resolves a URL into format URLs, web-mux combines separate video/audio URLs
 into one file.
@@ -17,16 +17,49 @@ export interface ExtractorEnv {
     url: string,
     headers: Record<string, string>
   ): Promise<ReadableStream>;
+  /** HLS-only platforms (bluesky, twitch VOD) need this for getStream() */
+  remuxHls?(
+    url: string,
+    headers: Record<string, string>
+  ): Promise<ReadableStream>;
+  /** applied to every fetch; defaults to 10s. set 0 to disable */
+  timeoutMs?: number;
+  /** skip the extra round-trip that measures HLS duration */
+  skipDurationFetch?: boolean;
+  oembedThumb?(url: string): Promise<string | undefined>;
+  ogImageThumb?(url: string): Promise<string | undefined>;
+  cookie?: string;
+  authedFetch?(url: string, headers: Record<string, string>): Promise<Response>;
+  fetchSessionHeaders?(
+    url: string,
+    headers: Record<string, string>
+  ): Promise<{ ok: boolean; status: number; setCookie: string | null }>;
 }
 ```
 
 pass nothing (`createXExtractor()`) and it uses plain global `fetch`, or
 inject your own SSRF-safe fetch / proxy pool / auth headers.
 
-ported so far: `x.ts`, `bluesky.ts`, `vimeo.ts` — 3 of 11, as a template for
-the rest. each one runs its output through `normalizeTitle`/`normalizeArtist`
-(vendored from `social.service.ts`) before returning, so titles/uploaders
-match what the app shows — not just raw platform data.
+every request goes through `env.timeoutMs` (default 10s), so a slow platform
+can never hang your process. set it to `0` only if your injected fetch
+already enforces its own deadline.
+
+per-extractor state (soundcloud's `client_id`, tiktok's cookie jar, reddit's
+session) is scoped to the instance, so two consumers with different envs
+never share credentials.
+
+ported so far: `x`, `bluesky`, `vimeo`, `dailymotion`, `pinterest`,
+`reddit`, `snapchat`, `twitch`, `soundcloud`, `bilibili`, `facebook`,
+`threads`, `tiktok`, `instagram` — 14 platforms. each one runs its output
+through `normalizeTitle`/`normalizeArtist` (vendored from
+`social.service.ts`) before returning, so titles/uploaders match what the
+app shows — not just raw platform data.
+
+`getRouteName(url)` returns the stable platform id from `ROUTES`. Both
+consumers use it for metrics and labelling, and both run live e2e against
+the same fixtures (`web/api/tests/e2e/cases.json`,
+`mobile/.maestro/e2e-cases.json`), so adding a platform to `ROUTES` routes,
+labels and gates it in both.
 
 for URLs you don't want to route by hand, `resolve(url)` picks the right
 extractor by host and calls `getInfo` in one step; `getExtractor(url)` gives
@@ -41,11 +74,49 @@ const extractor = getExtractor('https://vimeo.com/76979871');
 const stream = extractor && (await extractor.getStream(info));
 ```
 
+### Failure contract
+
+every platform fails the same way: it **throws** a typed `ExtractorError`.
+`null` is reserved for "this URL isn't for me" — never for "something broke".
+
+```ts
+import { resolve, ExtractorError } from '@phantom/extractors';
+
+try {
+  const info = await resolve(url); // null => no extractor for this host
+  if (!info) return fallback(url);
+} catch (error) {
+  if (!(error instanceof ExtractorError)) throw error;
+  if (error.retryable) return scheduleRetry(url); // 429, 5xx, socket death
+  if (error.expected) return tellUser(error.message); // private/removed/login
+}
+```
+
+| flag        | meaning                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `retryable` | worth trying the same URL again (rate limit, server error, network)                      |
+| `expected`  | the platform's answer, not our bug — safe to show the user, safe to skip crash reporting |
+
+transport failures are detected via `error.code` / `error.cause.code`
+(`ENOTFOUND`, `ECONNRESET`, `ETIMEDOUT`, `AbortError`, …), not by grepping
+the message string.
+
+### Reusing the internals
+
+if you're writing your own extractor alongside these (like `web/api`'s
+youtube or `mobile`'s spotify), import the shared primitives instead of
+copying them — `@phantom/extractors/shared` (or the root export) gives you
+`envFetch`, `probeFileSize`, `backfillSizes`, `parseHlsMaster`,
+`selectFormat`, `buildVideoInfo`, `hostOf` and the error factories.
+
+`buildVideoInfo` is the only place a `VideoInfo` should be constructed; it
+applies the defaults and enforces `isPartial ⇒ !isFullData`.
+
 ### Scope: what this is not
 
 this package stops at "resolve a URL into normalized metadata + formats." it
 does **not** include the racing orchestrator or metascraper fallback that
-`web/backend/extractors/index.ts` has — the layer that races the real
+`web/api/extractors/index.ts` has — the layer that races the real
 extractor against an oEmbed/metascraper fetch and fires an early "metadata
 found" progress event for the picker UI. that's left out on purpose:
 
@@ -75,11 +146,16 @@ two checks, both real (not mocks):
 
 1. **`npm run demo:mock`** — builds `dist/` and runs `examples/mock-demo.ts`
    against the built output, using the same fixture as
-   `web/backend/tests/extractors/x_extractor.test.ts`.
+   `web/api/tests/extractors/x_extractor.test.ts`.
 2. **tarball install** — `npm pack`, install the `.tgz` into a scratch
    project, run a script that imports `@phantom/extractors` from
    `node_modules`. catches "works in the repo, missing from what gets
    published" bugs that `demo:mock` alone can't.
+
+`dist/` is built at `prepack` time and shipped prebuilt — there is no
+install-time build step, so `--ignore-scripts` consumers work too.
+`npm run build` starts from a clean `dist/` so stale artifacts can't
+accumulate.
 
 `examples/live-real.mjs` also runs the built package against real hosts,
 using the same URLs as `mobile/tests/live/live-cases.json` — x.com, bsky.app,
@@ -88,10 +164,11 @@ Vimeo's CDN.
 
 ## What's still unresolved
 
-- 3 of 11 web extractors ported (`x.ts`, `bluesky.ts`, `vimeo.ts`). same
-  mechanical conversion needed for the rest — vimeo (multi-step
-  config/page-hash/player-page fallback chain) was the most involved of the
-  three; the remaining 8 range between x's simplicity and vimeo's.
+- `spotify` ships as shared metadata helpers only (`parseTrackId`,
+  `parseEmbedHtml`, `mergeSpotifyMeta`, embed/odesli fetchers) — full
+  resolution stays runtime-local (web: brain registry + soundcharts;
+  mobile: supabase token + on-device youtube match). `youtube` stays split
+  too (server `youtubei.js` vs WebView BotGuard) — same reason.
 - `env.remuxHls` is unimplemented in `defaultEnv` — a consumer wanting
   bluesky or HLS-fallback vimeo streams has to supply it themselves (e.g.
   spawn `ffmpeg`, or a WASM remuxer for browser/RN use).

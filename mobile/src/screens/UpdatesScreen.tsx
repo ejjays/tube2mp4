@@ -25,7 +25,7 @@ import { tapSelection, tapSuccess } from '../lib/haptics';
 import { compareVersions } from '../lib/updater/manifest';
 import BottomSheet from '../components/sheets/BottomSheet';
 import UpdateDetailSheet from '../components/sheets/UpdateDetailSheet';
-import PostDetailScreen from './PostDetailScreen';
+import PostDetailPanel from '../components/social/PostDetailPanel';
 import PostMarkdown from '../components/PostMarkdown';
 import NotificationsPanel from '../components/social/NotificationsPanel';
 import Avatar from '../components/Avatar';
@@ -169,7 +169,9 @@ function clampForPreview(text: string): { head: string; clamped: boolean } {
     budget.lastIndexOf(' ')
   );
   let head =
-    boundary > PREVIEW_CHARS * 0.5 ? clean.slice(0, boundary).trimEnd() : budget;
+    boundary > PREVIEW_CHARS * 0.5
+      ? clean.slice(0, boundary).trimEnd()
+      : budget;
   // a cut inside a table leaves bare pipe rows md4c renders as literal text;
   // back off to before the table start instead of showing broken markup
   const rowStart = head.indexOf('\n|');
@@ -237,9 +239,10 @@ function PostCard({
                     ? tw`font-sans-semibold`
                     : null,
                   {
-                    color: compareVersions(installed, update.version) < 0
-                      ? CYAN
-                      : 'rgba(255,255,255,0.3)',
+                    color:
+                      compareVersions(installed, update.version) < 0
+                        ? CYAN
+                        : 'rgba(255,255,255,0.3)',
                   },
                 ]}
               >
@@ -957,7 +960,7 @@ function UpdatesScreen({
         </View>
 
         {postUpdate ? (
-          <PostDetailScreen
+          <PostDetailPanel
             update={postUpdate}
             tallies={summarizeReactions(reactionRows, postUpdate.id, userId)}
             myName={myName}

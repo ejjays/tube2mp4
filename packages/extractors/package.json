@@ -22,6 +22,7 @@
     "downloader"
   ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
@@ -36,13 +37,81 @@
       "types": "./dist/social.d.ts",
       "import": "./dist/social.js"
     },
+    "./shared": {
+      "types": "./dist/shared/index.d.ts",
+      "import": "./dist/shared/index.js"
+    },
+    "./x": {
+      "types": "./dist/x.d.ts",
+      "import": "./dist/x.js"
+    },
+    "./bluesky": {
+      "types": "./dist/bluesky.d.ts",
+      "import": "./dist/bluesky.js"
+    },
+    "./vimeo": {
+      "types": "./dist/vimeo.d.ts",
+      "import": "./dist/vimeo.js"
+    },
+    "./dailymotion": {
+      "types": "./dist/dailymotion.d.ts",
+      "import": "./dist/dailymotion.js"
+    },
+    "./pinterest": {
+      "types": "./dist/pinterest.d.ts",
+      "import": "./dist/pinterest.js"
+    },
+    "./reddit": {
+      "types": "./dist/reddit.d.ts",
+      "import": "./dist/reddit.js"
+    },
+    "./snapchat": {
+      "types": "./dist/snapchat.d.ts",
+      "import": "./dist/snapchat.js"
+    },
+    "./twitch": {
+      "types": "./dist/twitch.d.ts",
+      "import": "./dist/twitch.js"
+    },
+    "./soundcloud": {
+      "types": "./dist/soundcloud.d.ts",
+      "import": "./dist/soundcloud.js"
+    },
+    "./bilibili": {
+      "types": "./dist/bilibili.d.ts",
+      "import": "./dist/bilibili.js"
+    },
+    "./tiktok": {
+      "types": "./dist/tiktok.d.ts",
+      "import": "./dist/tiktok.js"
+    },
+    "./facebook": {
+      "types": "./dist/facebook/index.d.ts",
+      "import": "./dist/facebook/index.js"
+    },
     "./facebook/*": {
       "types": "./dist/facebook/*.d.ts",
       "import": "./dist/facebook/*.js"
     },
+    "./threads": {
+      "types": "./dist/threads/index.d.ts",
+      "import": "./dist/threads/index.js"
+    },
     "./threads/*": {
       "types": "./dist/threads/*.d.ts",
       "import": "./dist/threads/*.js"
+    },
+    "./instagram": {
+      "types": "./dist/instagram/index.d.ts",
+      "import": "./dist/instagram/index.js"
+    },
+    "./instagram/*": {
+      "types": "./dist/instagram/*.d.ts",
+      "import": "./dist/instagram/*.js"
+    },
+    "./spotify": {
+      "types": "./dist/spotify.d.ts",
+      "import": "./dist/spotify.js"
     }
   },
   "files": [
@@ -53,17 +122,18 @@
     "access": "public"
   },
   "scripts": {
-    "build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
     "prepack": "npm run build",
-    "postinstall": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
-    "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
-    "test": "node ../../node_modules/vitest/vitest.mjs run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
     "demo:mock": "npm run build && node --experimental-strip-types examples/mock-demo.ts",
     "demo:live": "npm run build && node --experimental-strip-types examples/live-demo.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
   },
   "engines": {
     "node": ">=18"

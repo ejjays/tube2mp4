@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tweetToken } from '../src/extractors/x';
+import { tweetToken } from '@phantom/extractors';
 
 describe('tweetToken', () => {
   it('is deterministic, dot-free and input-sensitive', () => {

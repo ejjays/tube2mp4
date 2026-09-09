@@ -3,10 +3,10 @@ import { View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { warn as logWarn } from '../../lib/log';
 import {
-  attachWebView,
+  attachGenericWebView,
   onWebViewFailed,
   onWebViewHttpError,
-  onWebViewMessage,
+  onGenericWebViewMessage,
   onWebViewPageEnded,
   onWebViewRequest,
 } from '../../lib/webviewExtraction/host';
@@ -43,7 +43,7 @@ export default function GenericExtractorWebView() {
         domStorageEnabled
         cacheEnabled
         onLoadStart={() =>
-          attachWebView({
+          attachGenericWebView({
             navigate: (uri) => setSource({ uri }),
             injectJavaScript: (js) => ref.current?.injectJavaScript(js),
           })
@@ -53,7 +53,7 @@ export default function GenericExtractorWebView() {
           onWebViewRequest(request.url);
           return true;
         }}
-        onMessage={(event) => onWebViewMessage(event.nativeEvent.data)}
+        onMessage={(event) => onGenericWebViewMessage(event.nativeEvent.data)}
         onError={({ nativeEvent }) => {
           logWarn(
             'GenericExtractorWebView',

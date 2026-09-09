@@ -1,7 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 import { deleteAsync, moveAsync } from 'expo-file-system/legacy';
 import { DESKTOP_UA } from '../userAgents';
-import type { Format, VideoInfo } from '../../extractors/shared/types';
+import type { Format, VideoInfo } from '@phantom/extractors';
 import { refererFor, type DownloadState } from '../format';
 import { chunkedDownload } from './download';
 import {
@@ -62,7 +62,7 @@ function buildInflight(
     id: stem,
     title: pick(seed?.title, info.title),
     author: pick(seed?.author, info.uploader),
-    platform: pick(seed?.platform, info.extractorKey),
+    platform: pick(seed?.platform, info.extractorKey ?? ''),
     ext: pick(seed?.ext, format.extension || 'mp4'),
     isAudio: pick(seed?.isAudio, format.isAudio && !format.isVideo),
     thumbnail: pick(seed?.thumbnail, info.thumbnail),
@@ -156,7 +156,7 @@ async function fetchMedia({
   const ext = format.extension || 'mp4';
   const headers = info.downloadHeaders ?? {
     'User-Agent': DESKTOP_UA,
-    Referer: refererFor(info.extractorKey),
+    Referer: refererFor(info.extractorKey ?? ''),
   };
 
   const fetchTo = async (

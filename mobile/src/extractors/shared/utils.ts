@@ -1,34 +1,35 @@
+import { buildPageHeaders } from '@phantom/extractors';
+import { DESKTOP_UA } from '../../lib/userAgents';
 import { gatedFetch, timeoutSignal } from '../../lib/net';
 
-/**
- * html entity decode for scraped pages; matches the entity set social
- * platforms actually emit (&amp; &lt; &gt; &quot; &apos; + numeric).
- * duplicated in 3 extractors historically — single source now.
- */
-export function decodeEntities(text: string): string {
-  return text.replace(
-    /&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/giu,
-    (entity, code: string) => {
-      if (code.startsWith('#x')) {
-        return String.fromCodePoint(parseInt(code.slice(2), 16));
-      }
-      if (code.startsWith('#')) {
-        return String.fromCodePoint(parseInt(code.slice(1), 10));
-      }
-      switch (code.toLowerCase()) {
-        case 'amp':
-          return '&';
-        case 'lt':
-          return '<';
-        case 'gt':
-          return '>';
-        case 'quot':
-          return '"';
-        default:
-          return "'";
-      }
-    }
-  );
+const HEADERS = buildPageHeaders(DESKTOP_UA);
+
+export type PageFetchOptions = {
+  cookie?: string;
+};
+
+export type PageFetchResult = { html: string; targetUrl: string };
+
+export async function fetchPageHtml(
+  target: string,
+  options: PageFetchOptions,
+  timeoutMs = 10000
+): Promise<PageFetchResult | null> {
+  const cookie = typeof options.cookie === 'string' ? options.cookie : null;
+  const response = await gatedFetch(target, {
+    headers: {
+      ...HEADERS,
+      ...(cookie && { Cookie: cookie }),
+    },
+    redirect: 'follow',
+    signal: timeoutSignal(timeoutMs),
+  });
+  if (!response.ok) return null;
+  return { html: await response.text(), targetUrl: response.url || target };
+}
+
+export function fetchFileSize(url: string): Promise<number | undefined> {
+  return probeFileSize(url, { 'User-Agent': DESKTOP_UA });
 }
 
 // HEAD the media url for its size; referer+cookies sent because tokenized CDNs
@@ -52,9 +53,3 @@ export async function probeFileSize(
     return undefined;
   }
 }
-
-export {
-  normalizeArtist,
-  normalizeTitle,
-  type RawSocialData,
-} from '@phantom/extractors/social';

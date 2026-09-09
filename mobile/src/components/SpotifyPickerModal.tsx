@@ -41,7 +41,7 @@ import PreviewAudioWebView, {
   type PreviewAudioMessage,
 } from './webviews/PreviewAudioWebView';
 import { useScreenSize } from '../hooks/useScreenSize';
-import { VideoInfo, Format } from '../extractors/shared/types';
+import { VideoInfo, Format } from '@phantom/extractors';
 import {
   DownloadState,
   DownloadMeta,

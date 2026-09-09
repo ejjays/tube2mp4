@@ -1,8 +1,19 @@
-import { Format, VideoInfo, ExtractorOptions } from './types.js';
-import { ExtractorEnv, defaultEnv } from './env.js';
-import { normalizeTitle, normalizeArtist } from './social.js';
-import { DESKTOP_UA, decodeEntities } from './util.js';
-import { noVideo, fromStatus, classifyThrown, ExtractorError } from './errors.js';
+import { Format, VideoInfo, ExtractorOptions } from './shared/types.js';
+import { ExtractorEnv, defaultEnv } from './shared/env.js';
+import { normalizeTitle, normalizeArtist } from './shared/social.js';
+import { DESKTOP_UA, decodeEntities } from './shared/util.js';
+import {
+  noVideo,
+  fromStatus,
+  classifyThrown,
+  ExtractorError,
+} from './shared/errors.js';
+import {
+  envFetch,
+  probeFileSize,
+  selectFormat,
+  buildVideoInfo,
+} from './shared/fetch.js';
 
 const REFERER = 'https://www.reddit.com/';
 
@@ -23,8 +34,12 @@ function str(v: unknown): string | undefined {
 
 function vidOf(post: RedditPostData | undefined): string | undefined {
   if (!post) return undefined;
-  const fallbackUrl = str(post.secure_media?.reddit_video?.fallback_url) ?? str(post.media?.reddit_video?.fallback_url);
-  const found = fallbackUrl ? /v\.redd\.it\/([a-z0-9]+)/iu.exec(fallbackUrl)?.[1] : undefined;
+  const fallbackUrl =
+    str(post.secure_media?.reddit_video?.fallback_url) ??
+    str(post.media?.reddit_video?.fallback_url);
+  const found = fallbackUrl
+    ? /v\.redd\.it\/([a-z0-9]+)/iu.exec(fallbackUrl)?.[1]
+    : undefined;
   return found ?? vidOf(post.crosspost_parent_list?.[0]);
 }
 
@@ -32,7 +47,10 @@ async function postId(env: ExtractorEnv, url: string): Promise<string | null> {
   const direct = url.match(/\/comments\/([a-z0-9]+)/iu);
   if (direct) return direct[1];
   try {
-    const res = await env.fetch(url, { headers: { 'User-Agent': DESKTOP_UA }, redirect: 'follow' } as RequestInit);
+    const res = await envFetch(env, url, {
+      headers: { 'User-Agent': DESKTOP_UA },
+      redirect: 'follow',
+    } as RequestInit);
     const finalUrl = (res as unknown as { url: string }).url ?? '';
     const redir = finalUrl.match(/\/comments\/([a-z0-9]+)/iu);
     return redir ? redir[1] : null;
@@ -41,7 +59,13 @@ async function postId(env: ExtractorEnv, url: string): Promise<string | null> {
   }
 }
 
-function parsePostJson(text: string): { vid?: string; title?: string; uploader?: string; thumbnail?: string; isVideo: boolean } | null {
+function parsePostJson(text: string): {
+  vid?: string;
+  title?: string;
+  uploader?: string;
+  thumbnail?: string;
+  isVideo: boolean;
+} | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -49,49 +73,178 @@ function parsePostJson(text: string): { vid?: string; title?: string; uploader?:
     return null;
   }
   const listing = Array.isArray(parsed) ? parsed[0] : parsed;
-  const post = (listing as { data?: { children?: { data?: RedditPostData }[] } })?.data?.children?.[0]?.data;
+  const post = (
+    listing as { data?: { children?: { data?: RedditPostData }[] } }
+  )?.data?.children?.[0]?.data;
   if (!post) return null;
   const vid = vidOf(post);
   if (vid) {
     const author = str(post.author);
     const previewUrl = str(post.preview?.images?.[0]?.source?.url);
-    const thumb = (previewUrl ? decodeEntities(previewUrl) : undefined) ?? (/^https?:\/\//iu.test(str(post.thumbnail) ?? '') ? str(post.thumbnail) : undefined);
-    return { vid, title: str(post.title) ?? 'Reddit Video', uploader: author && author !== '[deleted]' ? author : 'Reddit', thumbnail: thumb, isVideo: true };
+    const thumb =
+      (previewUrl ? decodeEntities(previewUrl) : undefined) ??
+      (/^https?:\/\//iu.test(str(post.thumbnail) ?? '')
+        ? str(post.thumbnail)
+        : undefined);
+    return {
+      vid,
+      title: str(post.title) ?? 'Reddit Video',
+      uploader: author && author !== '[deleted]' ? author : 'Reddit',
+      thumbnail: thumb,
+      isVideo: true,
+    };
   }
   return { isVideo: post.is_video === true };
 }
 
-async function fetchMeta(env: ExtractorEnv, id: string): Promise<{ vid: string; title: string; uploader: string; thumbnail?: string } | null> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+function createSessionStore() {
+  let jar: { value: string; at: number } | null = null;
+  return {
+    get: (): string | null =>
+      jar && Date.now() - jar.at < SESSION_TTL_MS ? jar.value : null,
+    set: (value: string): void => {
+      jar = { value, at: Date.now() };
+    },
+    clear: (): void => {
+      jar = null;
+    },
+  };
+}
+
+type SessionStore = ReturnType<typeof createSessionStore>;
+
+async function harvestSessionInto(
+  env: ExtractorEnv,
+  store: SessionStore,
+  id: string
+): Promise<string | null> {
+  const fresh = store.get();
+  if (fresh) return fresh;
+  try {
+    const target = `https://www.reddit.com/svc/shreddit/comments/${id}?seeker-session=false&render-mode=partial&referer=${encodeURIComponent(REFERER)}`;
+    const headers = { 'User-Agent': DESKTOP_UA, Accept: 'text/html' };
+    let raw: string | null = null;
+    if (env.fetchSessionHeaders) {
+      const out = await env.fetchSessionHeaders(target, headers);
+      if (!out.ok) return null;
+      raw = out.setCookie;
+    } else {
+      const res = await envFetch(env, target, { headers });
+      if (!res.ok) return null;
+      raw = res.headers.get('set-cookie');
+    }
+    const jar = (raw ?? '')
+      .split(/,(?=[^;,]+?=)/u)
+      .map((cookie) => cookie.split(';')[0].trim())
+      .filter((pair) => /^[a-z][a-z0-9_]*=/iu.test(pair));
+    const merged = [...new Set(jar)].join('; ');
+    if (!/loid=/iu.test(merged)) return null;
+    store.set(merged);
+    return merged;
+  } catch {
+    return null;
+  }
+}
+
+async function probeSize(
+  env: ExtractorEnv,
+  url: string
+): Promise<number | undefined> {
+  return probeFileSize(env, url, { 'User-Agent': DESKTOP_UA });
+}
+
+async function fetchMeta(
+  env: ExtractorEnv,
+  store: SessionStore,
+  id: string
+): Promise<{
+  vid: string;
+  title: string;
+  uploader: string;
+  thumbnail?: string;
+} | null> {
+  let cookie = await harvestSessionInto(env, store, id);
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await env.fetch(`https://www.reddit.com/comments/${id}.json?raw_json=1`, {
-        headers: { 'User-Agent': DESKTOP_UA, Accept: 'application/json' },
-      });
-      if (!res.ok) continue;
+      const res = await envFetch(
+        env,
+        `https://www.reddit.com/comments/${id}.json?raw_json=1`,
+        {
+          headers: {
+            'User-Agent': DESKTOP_UA,
+            Accept: 'application/json',
+            ...(cookie ? { Cookie: cookie } : {}),
+          },
+        }
+      );
+      lastStatus = res.status;
+      if (!res.ok) {
+        store.clear();
+        cookie = await harvestSessionInto(env, store, id);
+        if (attempt < 2) await sleep(1500 * (attempt + 1));
+        continue;
+      }
       const text = await res.text();
       const parsed = parsePostJson(text);
-      if (parsed?.vid) return parsed as { vid: string; title: string; uploader: string; thumbnail?: string };
+      if (parsed?.vid)
+        return parsed as {
+          vid: string;
+          title: string;
+          uploader: string;
+          thumbnail?: string;
+        };
       if (parsed && !parsed.isVideo) return null;
     } catch {
-      /* retry */
+      /* retry below */
     }
+    store.clear();
+    cookie = await harvestSessionInto(env, store, id);
+    if (attempt < 2) await sleep(1500 * (attempt + 1));
   }
-  for (const url of [`https://old.reddit.com/comments/${id}/`, `https://www.reddit.com/comments/${id}/`]) {
+  for (const url of [
+    `https://old.reddit.com/comments/${id}/`,
+    `https://www.reddit.com/comments/${id}/`,
+  ]) {
     try {
-      const res = await env.fetch(url, { headers: { 'User-Agent': DESKTOP_UA, Accept: 'text/html' } });
+      const res = await envFetch(env, url, {
+        headers: {
+          'User-Agent': DESKTOP_UA,
+          Accept: 'text/html',
+          ...(cookie ? { Cookie: cookie } : {}),
+        },
+      });
       if (!res.ok) continue;
       const html = await res.text();
-      const vid = /data-url="https?:\/\/v\.redd\.it\/([a-z0-9]+)"/iu.exec(html)?.[1] ?? /fallback_url\\?":\\?"https?:\\?\/\\?\/v\.redd\.it\/([a-z0-9]+)/iu.exec(html)?.[1];
+      const vid =
+        /data-url="https?:\/\/v\.redd\.it\/([a-z0-9]+)"/iu.exec(html)?.[1] ??
+        /fallback_url\\?":\\?"https?:\\?\/\\?\/v\.redd\.it\/([a-z0-9]+)/iu.exec(
+          html
+        )?.[1];
       if (!vid) continue;
-      const title = /property="og:title"[^>]+content="([^"]*)"/iu.exec(html)?.[1] ?? 'Reddit Video';
+      const title =
+        /property="og:title"[^>]+content="([^"]*)"/iu.exec(html)?.[1] ??
+        'Reddit Video';
       const author = /data-author="([^"]+)"/iu.exec(html)?.[1] ?? 'Reddit';
-      const image = /property="og:image"[^>]+content="([^"]*)"/iu.exec(html)?.[1];
-      return { vid, title: decodeEntities(title), uploader: author !== '[deleted]' && author ? author : 'Reddit', thumbnail: image ? decodeEntities(image) : undefined };
+      const image = /property="og:image"[^>]+content="([^"]*)"/iu.exec(
+        html
+      )?.[1];
+      return {
+        vid,
+        title: decodeEntities(title),
+        uploader: author !== '[deleted]' && author ? author : 'Reddit',
+        thumbnail: image ? decodeEntities(image) : undefined,
+      };
     } catch {
       continue;
     }
   }
-  return null;
+  throw fromStatus(lastStatus || 503, 'Reddit');
 }
 
 function attrNum(attrs: string, name: string): number {
@@ -106,7 +259,10 @@ function repBlocks(mpd: string): { attrs: string; name: string }[] {
     .map((part) => {
       const close = part.indexOf('>');
       const base = part.match(/<BaseURL>([^<]+)<\/BaseURL>/iu);
-      return { attrs: close >= 0 ? part.slice(0, close) : '', name: base?.[1].trim() ?? '' };
+      return {
+        attrs: close >= 0 ? part.slice(0, close) : '',
+        name: base?.[1].trim() ?? '',
+      };
     })
     .filter((r) => r.name);
 }
@@ -116,11 +272,22 @@ function parseDuration(mpd: string): number | undefined {
   return m ? Math.round(Number(m[1] ?? 0) * 60 + Number(m[2])) : undefined;
 }
 
-function pickAudioUrl(reps: { attrs: string; name: string }[], base: string): string | undefined {
-  const audio = reps.filter((r) => /audio/iu.test(r.name)).sort((a, b) => attrNum(b.attrs, 'bandwidth') - attrNum(a.attrs, 'bandwidth'))[0];
+function pickAudioUrl(
+  reps: { attrs: string; name: string }[],
+  base: string
+): string | undefined {
+  const audio = reps
+    .filter((r) => /audio/iu.test(r.name))
+    .sort(
+      (a, b) => attrNum(b.attrs, 'bandwidth') - attrNum(a.attrs, 'bandwidth')
+    )[0];
   return audio ? `${base}/${audio.name}` : undefined;
 }
-function buildFormats(reps: { attrs: string; name: string }[], base: string, audioUrl?: string): Format[] {
+function buildFormats(
+  reps: { attrs: string; name: string }[],
+  base: string,
+  audioUrl?: string
+): Format[] {
   const seen = new Set<number>();
   const formats: Format[] = [];
   for (const rep of reps) {
@@ -154,22 +321,42 @@ function buildFormats(reps: { attrs: string; name: string }[], base: string, aud
 }
 
 export function createRedditExtractor(env: ExtractorEnv = defaultEnv) {
-  async function getInfo(url: string, _opts: ExtractorOptions = {}): Promise<VideoInfo | null> {
+  const sessions = createSessionStore();
+
+  async function getInfo(
+    url: string,
+    _opts: ExtractorOptions = {}
+  ): Promise<VideoInfo | null> {
     const id = await postId(env, url);
     if (!id) return null;
     try {
-      const meta = await fetchMeta(env, id);
+      const meta = await fetchMeta(env, sessions, id);
       if (!meta) throw noVideo('Reddit');
       const base = `https://v.redd.it/${meta.vid}`;
-      const mpdRes = await env.fetch(`${base}/DASHPlaylist.mpd`, { headers: { 'User-Agent': DESKTOP_UA } });
+      const mpdRes = await envFetch(env, `${base}/DASHPlaylist.mpd`, {
+        headers: { 'User-Agent': DESKTOP_UA },
+      });
       if (!mpdRes.ok) throw fromStatus(mpdRes.status, 'Reddit');
       const mpd = await mpdRes.text();
       const reps = repBlocks(mpd);
       const audioUrl = pickAudioUrl(reps, base);
       const formats = buildFormats(reps, base, audioUrl);
       if (formats.length === 0) throw noVideo('Reddit', 'clip');
-      const info: VideoInfo = {
-        type: 'video',
+      const sizedAudio = formats.find((f) => f.muxAudioUrl)?.muxAudioUrl;
+      const audioSize = sizedAudio
+        ? ((await probeSize(env, sizedAudio)) ?? 0)
+        : 0;
+      for (let i = 0; i < formats.length; i += 3) {
+        const batch = formats.slice(i, i + 3);
+        await Promise.all(
+          batch.map(async (format) => {
+            if (!format.url || format.filesize) return;
+            const videoSize = await probeSize(env, format.url);
+            if (videoSize) format.filesize = videoSize + audioSize;
+          })
+        );
+      }
+      const info = buildVideoInfo({
         id,
         title: meta.title,
         uploader: meta.uploader,
@@ -178,15 +365,12 @@ export function createRedditExtractor(env: ExtractorEnv = defaultEnv) {
         duration: parseDuration(mpd),
         formats,
         extractorKey: 'reddit',
-        isJsInfo: true,
-        fromBrain: false,
-        isPartial: false,
-        isIsrcMatch: false,
-        isFullData: true,
         downloadHeaders: { 'User-Agent': DESKTOP_UA, Referer: REFERER },
-      };
+      });
       info.title = normalizeTitle(info as unknown as Record<string, unknown>);
-      info.uploader = normalizeArtist(info as unknown as Record<string, unknown>);
+      info.uploader = normalizeArtist(
+        info as unknown as Record<string, unknown>
+      );
       return info;
     } catch (error: unknown) {
       if (error instanceof ExtractorError) throw error;
@@ -194,10 +378,12 @@ export function createRedditExtractor(env: ExtractorEnv = defaultEnv) {
     }
   }
 
-  function getStream(videoInfo: VideoInfo, options: ExtractorOptions = {}): Promise<ReadableStream> {
-    const selected =
-      videoInfo.formats.find((f) => String(f.formatId) === String(options.formatId)) ?? videoInfo.formats[0];
-    if (!selected?.url) throw new Error('No stream URL');
+  function getStream(
+    videoInfo: VideoInfo,
+    options: ExtractorOptions = {}
+  ): Promise<ReadableStream> {
+    const selected = selectFormat(videoInfo, options);
+    if (!selected?.url) throw noVideo('Reddit');
     if (selected.url.includes('.m3u8') || selected.isHls) {
       if (!env.remuxHls) throw new Error('HLS needs remuxHls');
       return env.remuxHls(selected.url, {});
@@ -205,5 +391,9 @@ export function createRedditExtractor(env: ExtractorEnv = defaultEnv) {
     return env.streamUrl(selected.url, {});
   }
 
-  return { getInfo, getStream };
+  return {
+    getInfo,
+    getStream,
+    __resetSessionForTests: sessions.clear,
+  };
 }

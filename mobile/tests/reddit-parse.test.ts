@@ -20,6 +20,8 @@ vi.mock('../src/lib/authFetch', () => ({
 
 import { gatedFetch } from '../src/lib/net';
 import { cookieGet } from '../src/lib/authFetch';
+import { createRedditExtractor } from '@phantom/extractors';
+import { mobileSharedEnv } from '../src/extractors/shared/env';
 
 const mockFetch = vi.mocked(gatedFetch);
 const mockSession = vi.mocked(cookieGet);
@@ -56,6 +58,17 @@ function headRes(size: number): Response {
     headers: {
       get: (k: string) => (/content-length/iu.test(k) ? String(size) : null),
     },
+  } as unknown as Response;
+}
+
+function jsonFetchRes(body: unknown, status = 200): Response {
+  const text = typeof body === 'string' ? body : JSON.stringify(body);
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    url: '',
+    text: () => Promise.resolve(text),
+    headers: { get: () => null },
   } as unknown as Response;
 }
 
@@ -121,8 +134,16 @@ const HTML = `<html><head>
 <div class="thing" data-author="WashHappy5391" data-url="https://v.redd.it/yzxzty7ymd9h1" data-permalink="/r/pinoy/comments/1uf2nx8/x/"></div>
 </body></html>`;
 
+// session harvest goes through cookieGet (blob-util, no jar);
+// json/html/mpd/size go through gatedFetch
+function mockSessionLeg(): void {
+  mockSession.mockImplementation(() =>
+    Promise.resolve(sessionRes('', { setCookie: SESSION_COOKIE }))
+  );
+}
+
 // mpd parse + HEAD sizing happen after metadata resolves
-function mockMediaLeg(): void {
+function mockMediaLeg(jsonBody: unknown = POST): void {
   mockFetch.mockImplementation((url, init) => {
     if (init?.method === 'HEAD') {
       const size = /AUDIO/u.test(url)
@@ -134,14 +155,21 @@ function mockMediaLeg(): void {
             : 3000000;
       return Promise.resolve(headRes(size));
     }
+    if (/\.json/u.test(url)) return Promise.resolve(jsonFetchRes(jsonBody));
+    if (/DASHPlaylist\.mpd/u.test(url)) return Promise.resolve(textRes(MPD));
+    if (/old\.reddit\.com|www\.reddit\.com\/comments/u.test(url)) {
+      return Promise.resolve(
+        htmlFetchRes(typeof jsonBody === 'string' ? jsonBody : HTML, url)
+      );
+    }
     return Promise.resolve(textRes(MPD));
   });
 }
 
-// extractor caches loid at module level -> fresh instance per test
-async function loadGetInfo() {
-  const mod = await import('../src/extractors/reddit');
-  return mod.getInfo;
+// session jar lives on the extractor instance, so a fresh extractor per test
+// is already an isolated session
+function loadGetInfo() {
+  return (url: string) => createRedditExtractor(mobileSharedEnv).getInfo(url);
 }
 
 describe('reddit getInfo', () => {
@@ -153,12 +181,7 @@ describe('reddit getInfo', () => {
 
   it('parses all qualities + audio from a v.redd.it post', async () => {
     const getInfo = await loadGetInfo();
-    mockSession.mockImplementation((url) => {
-      if (/svc\/shreddit/u.test(url)) {
-        return Promise.resolve(sessionRes('', { setCookie: SESSION_COOKIE }));
-      }
-      return Promise.resolve(sessionRes(POST));
-    });
+    mockSessionLeg();
     mockMediaLeg();
 
     const info = await getInfo(
@@ -189,35 +212,39 @@ describe('reddit getInfo', () => {
 
   it('sends the harvested loid cookie to the json api', async () => {
     const getInfo = await loadGetInfo();
-    mockSession.mockImplementation((url, headers) => {
-      if (/svc\/shreddit/u.test(url)) {
-        return Promise.resolve(sessionRes('', { setCookie: SESSION_COOKIE }));
-      }
-      expect(headers?.Cookie).toBe(
-        'loid=00000000test-token.Z0FBQUFBQnFJ; session_tracker=graqpmpdfkjpqnodql.0.1780640577676.Z0FBQUFBQnFJY2Zv; csrf_token=eb8b04de3234ae706008da91f032903d; token_v2=eyJhbGciOiJSUzI1NiJ9.test.payload'
-      );
-      return Promise.resolve(sessionRes(POST));
-    });
+    mockSessionLeg();
     mockMediaLeg();
 
     await getInfo('https://www.reddit.com/r/pinoy/comments/1uf2nx8/x/');
-    expect(mockSession).toHaveBeenCalledTimes(2);
+    const jsonCall = mockFetch.mock.calls.find(([called]) =>
+      /\.json/u.test(String(called))
+    );
+    expect(jsonCall?.[1]).toMatchObject({
+      headers: expect.objectContaining({
+        Cookie: expect.stringContaining('loid=00000000test-token'),
+      }),
+    });
+    expect(mockSession).toHaveBeenCalledTimes(1);
   });
 
   it('reharvests loid once when the json api 403s', async () => {
     const getInfo = await loadGetInfo();
     let sessionCalls = 0;
     let jsonCalls = 0;
-    mockSession.mockImplementation((url) => {
-      if (/svc\/shreddit/u.test(url)) {
-        sessionCalls += 1;
-        return Promise.resolve(sessionRes('', { setCookie: SESSION_COOKIE }));
-      }
-      jsonCalls += 1;
-      if (jsonCalls === 1) return Promise.resolve(sessionRes('', { status: 403 }));
-      return Promise.resolve(sessionRes(POST));
+    mockSession.mockImplementation(() => {
+      sessionCalls += 1;
+      return Promise.resolve(sessionRes('', { setCookie: SESSION_COOKIE }));
     });
-    mockMediaLeg();
+    mockFetch.mockImplementation((url, init) => {
+      if (init?.method === 'HEAD') return Promise.resolve(headRes(100));
+      if (/DASHPlaylist\.mpd/u.test(url)) return Promise.resolve(textRes(MPD));
+      if (/\.json/u.test(url)) {
+        jsonCalls += 1;
+        if (jsonCalls === 1) return Promise.resolve(jsonFetchRes('', 403));
+        return Promise.resolve(jsonFetchRes(POST));
+      }
+      return Promise.resolve(textRes(MPD));
+    });
 
     const info = await getInfo(
       'https://www.reddit.com/r/pinoy/comments/1uf2nx8/x/'
@@ -231,16 +258,21 @@ describe('reddit getInfo', () => {
     const getInfo = await loadGetInfo();
     let sessionCalls = 0;
     let jsonCalls = 0;
-    mockSession.mockImplementation((url) => {
-      if (/svc\/shreddit/u.test(url)) {
-        sessionCalls += 1;
-        return Promise.resolve(sessionRes('', { setCookie: SESSION_COOKIE }));
-      }
-      jsonCalls += 1;
-      if (jsonCalls === 1) return Promise.resolve(sessionRes('<html>blocked</html>'));
-      return Promise.resolve(sessionRes(POST));
+    mockSession.mockImplementation(() => {
+      sessionCalls += 1;
+      return Promise.resolve(sessionRes('', { setCookie: SESSION_COOKIE }));
     });
-    mockMediaLeg();
+    mockFetch.mockImplementation((url, init) => {
+      if (init?.method === 'HEAD') return Promise.resolve(headRes(100));
+      if (/DASHPlaylist\.mpd/u.test(url)) return Promise.resolve(textRes(MPD));
+      if (/\.json/u.test(url)) {
+        jsonCalls += 1;
+        if (jsonCalls === 1)
+          return Promise.resolve(jsonFetchRes('<html>blocked</html>'));
+        return Promise.resolve(jsonFetchRes(POST));
+      }
+      return Promise.resolve(textRes(MPD));
+    });
 
     const info = await getInfo(
       'https://www.reddit.com/r/pinoy/comments/1uf2nx8/x/'
@@ -268,15 +300,16 @@ describe('reddit getInfo', () => {
         },
       },
     ];
-    mockSession.mockImplementation((url) => {
-      if (/svc\/shreddit/u.test(url)) {
-        return Promise.resolve(sessionRes('', { setCookie: SESSION_COOKIE }));
+    mockSessionLeg();
+    mockFetch.mockImplementation((url, init) => {
+      if (init?.method === 'HEAD') return Promise.resolve(headRes(100));
+      if (/DASHPlaylist\.mpd/u.test(url)) return Promise.resolve(textRes(MPD));
+      if (/\.json/u.test(url)) return Promise.resolve(jsonFetchRes(degraded));
+      if (/old\.reddit\.com\/comments\/1uf2nx8/u.test(url)) {
+        return Promise.resolve(htmlFetchRes(HTML, url));
       }
-      if (/\.json/u.test(url)) return Promise.resolve(sessionRes(degraded));
-      expect(/old\.reddit\.com\/comments\/1uf2nx8/u.test(url)).toBe(true);
-      return Promise.resolve(sessionRes(HTML));
+      return Promise.resolve(htmlFetchRes('<html></html>', url));
     });
-    mockMediaLeg();
 
     const info = await getInfo(
       'https://www.reddit.com/r/pinoy/comments/1uf2nx8/x/'
@@ -289,17 +322,16 @@ describe('reddit getInfo', () => {
 
   it('returns a silent video when the mpd has no audio track', async () => {
     const getInfo = await loadGetInfo();
-    mockSession.mockImplementation((url) => {
-      if (/svc\/shreddit/u.test(url)) {
-        return Promise.resolve(sessionRes('', { setCookie: SESSION_COOKIE }));
-      }
-      return Promise.resolve(sessionRes(POST));
-    });
+    mockSessionLeg();
     const noAudio = MPD.replace(
       /<AdaptationSet contentType="audio">[\s\S]*?<\/AdaptationSet>/u,
       ''
     );
-    mockFetch.mockResolvedValue(textRes(noAudio));
+    mockFetch.mockImplementation((url, init) => {
+      if (init?.method === 'HEAD') return Promise.resolve(headRes(100));
+      if (/\.json/u.test(url)) return Promise.resolve(jsonFetchRes(POST));
+      return Promise.resolve(textRes(noAudio));
+    });
 
     const info = await getInfo(
       'https://www.reddit.com/r/x/comments/1uf2nx8/y/'
@@ -310,27 +342,29 @@ describe('reddit getInfo', () => {
 
   it('throws when the post has no v.redd.it video', async () => {
     const getInfo = await loadGetInfo();
-    mockSession.mockImplementation((url) => {
-      if (/svc\/shreddit/u.test(url)) {
-        return Promise.resolve(sessionRes('', { setCookie: SESSION_COOKIE }));
-      }
-      return Promise.resolve(
-        sessionRes([
-          {
-            data: {
-              children: [
-                {
-                  data: {
-                    title: 'a gallery',
-                    author: 'someone',
-                    is_gallery: true,
+    mockSessionLeg();
+    mockFetch.mockImplementation((url, init) => {
+      if (init?.method === 'HEAD') return Promise.resolve(headRes(100));
+      if (/\.json/u.test(url)) {
+        return Promise.resolve(
+          jsonFetchRes([
+            {
+              data: {
+                children: [
+                  {
+                    data: {
+                      title: 'a gallery',
+                      author: 'someone',
+                      is_gallery: true,
+                    },
                   },
-                },
-              ],
+                ],
+              },
             },
-          },
-        ])
-      );
+          ])
+        );
+      }
+      return Promise.resolve(htmlFetchRes('<html></html>', url));
     });
 
     await expect(
@@ -344,5 +378,15 @@ function textRes(body: string, ok = true): Response {
     ok,
     status: ok ? 200 : 403,
     text: () => Promise.resolve(body),
+  } as unknown as Response;
+}
+
+function htmlFetchRes(html: string, url: string): Response {
+  return {
+    ok: true,
+    status: 200,
+    url,
+    text: () => Promise.resolve(html),
+    headers: { get: () => 'text/html' },
   } as unknown as Response;
 }

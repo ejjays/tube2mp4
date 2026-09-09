@@ -18,7 +18,7 @@ import {
   RotateCcw,
 } from 'lucide-react-native';
 import tw from '../../lib/tw';
-import { Format } from '../../extractors/shared/types';
+import { Format } from '@phantom/extractors';
 import {
   type DownloadState,
   titleFor,

@@ -7,7 +7,7 @@
     "plugins/*.js"
   ],
   "project": ["**/*.{ts,tsx,js}", "!**/*.d.ts"],
-  "ignore": ["vitest.config.ts"],
+  "ignore": ["vitest.config.mts"],
   "ignoreDependencies": [
     "npm",
     "expo-asset",

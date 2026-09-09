@@ -27,7 +27,7 @@ Out of the box, the server applies:
 - **15 requests / min** on `/info` and `/stream-urls`
 - Per-IP **concurrency guard of 2** on `/convert` and `/proxy`
 
-Tune these in `web/backend/src/app.ts` if your traffic profile differs.
+Tune these in `web/api/src/app.ts` if your traffic profile differs.
 
 ## 4. Terminate TLS in Front
 
@@ -35,6 +35,6 @@ Run behind a reverse proxy or tunnel that provides HTTPS. The server already set
 
 ## 5. Keep Secrets Out of Git
 
-`web/backend/.env` and cookie files are already in `.gitignore` — keep them there. Dependency scanning (`npm audit` + OSV-Scanner) runs in CI; for live malicious-package alerts, enable the Socket GitHub App.
+`web/api/.env` and cookie files are already in `.gitignore` — keep them there. Dependency scanning (`npm audit` + OSV-Scanner) runs in CI; for live malicious-package alerts, enable the Socket GitHub App.
 
 For how to report a vulnerability, see [`../SECURITY.md`](../SECURITY.md).

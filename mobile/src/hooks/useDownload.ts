@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Format, VideoInfo } from '../extractors/shared/types';
+import type { Format, VideoInfo } from '@phantom/extractors';
 import {
   prettyName,
   formatLabel,
@@ -55,7 +55,7 @@ export function useDownload(info: VideoInfo | null) {
       const rawTitle = meta?.title?.trim() || info.title;
       const rawAuthor = meta?.author?.trim() || info.uploader;
       const stem = prettyName(
-        formatName(fmt, rawTitle, rawAuthor, info.extractorKey)
+        formatName(fmt, rawTitle, rawAuthor, info.extractorKey ?? '')
       );
 
       const outcome = await runDownload({

@@ -16,24 +16,59 @@ vi.mock('../../src/lib/authFetch', () => ({
   },
 }));
 
-import { getInfo as facebookGetInfo } from '../../src/extractors/facebook';
-import { getInfo as threadsGetInfo } from '../../src/extractors/threads';
-import { getInfo as xGetInfo } from '../../src/extractors/x';
-import { getInfo as tiktokGetInfo } from '../../src/extractors/tiktok';
-import { getInfo as vimeoGetInfo } from '../../src/extractors/vimeo';
-import { getInfo as dailymotionGetInfo } from '../../src/extractors/dailymotion';
+import {
+  createFacebookExtractor,
+  createThreadsExtractor,
+  createXExtractor,
+  createTikTokExtractor,
+  createVimeoExtractor,
+  createDailymotionExtractor,
+  createBlueskyExtractor,
+  createPinterestExtractor,
+  createTwitchExtractor,
+  createBilibiliExtractor,
+  createSnapchatExtractor,
+  createRedditExtractor,
+} from '@phantom/extractors';
+import {
+  mobileSharedEnv,
+  mobileSharedEnvWithThumbs,
+} from '../../src/extractors/shared/env';
+import { getBilibiliCookie } from '../../src/lib/settings';
 import { getInfo as soundcloudGetInfo } from '../../src/extractors/soundcloud';
-import { getInfo as redditGetInfo } from '../../src/extractors/reddit';
-import { getInfo as blueskyGetInfo } from '../../src/extractors/bluesky';
 import { getInfo as instagramGetInfo } from '../../src/extractors/instagram';
-import { getInfo as pinterestGetInfo } from '../../src/extractors/pinterest';
-import { getInfo as twitchGetInfo } from '../../src/extractors/twitch';
-import { getInfo as bilibiliGetInfo } from '../../src/extractors/bilibili';
-import { getInfo as snapchatGetInfo } from '../../src/extractors/snapchat';
+
+const withSharedEnv =
+  (
+    create: (
+      env: typeof mobileSharedEnv
+    ) => { getInfo: (url: string) => Promise<VideoInfo | null> }
+  ) =>
+  (url: string) =>
+    create(mobileSharedEnv).getInfo(url);
+
+const facebookGetInfo = withSharedEnv(createFacebookExtractor);
+const threadsGetInfo = withSharedEnv(createThreadsExtractor);
+const tiktokGetInfo = withSharedEnv(createTikTokExtractor);
+const dailymotionGetInfo = withSharedEnv(createDailymotionExtractor);
+const blueskyGetInfo = withSharedEnv(createBlueskyExtractor);
+const pinterestGetInfo = withSharedEnv(createPinterestExtractor);
+const twitchGetInfo = withSharedEnv(createTwitchExtractor);
+const snapchatGetInfo = withSharedEnv(createSnapchatExtractor);
+const redditGetInfo = withSharedEnv(createRedditExtractor);
+const xGetInfo = (url: string) =>
+  createXExtractor(mobileSharedEnv).getInfo(url, { isAudioMuxed: true });
+const vimeoGetInfo = (url: string) =>
+  createVimeoExtractor(mobileSharedEnvWithThumbs).getInfo(url);
+const bilibiliGetInfo = async (url: string) => {
+  const cookie = await getBilibiliCookie();
+  const env = cookie ? { ...mobileSharedEnv, cookie } : mobileSharedEnv;
+  return createBilibiliExtractor(env).getInfo(url);
+};
 import {
   ExtractorError,
   type VideoInfo,
-} from '../../src/extractors/shared/types';
+} from '@phantom/extractors';
 import {
   noVideo,
   notFound,
@@ -42,7 +77,7 @@ import {
   rateLimited,
   serverError,
   networkError,
-} from '../../src/extractors/shared/errors';
+} from '@phantom/extractors';
 import {
   MEDIA_JUNK_RE,
   hlsVideosOf,
@@ -84,8 +119,8 @@ type LiveCase = {
 const RUN_LIVE = process.env.VITEST_INCLUDE_LIVE === '1';
 const RUN_PROBE = process.env.VITEST_INCLUDE_PROBE === '1';
 
-// noVideo (!retryable && !expected) = page loaded but parser found nothing =
-// real regression → fail. everything else (transient/blocked/removed) skips.
+// emptyParse = page loaded but the parser found no media = real regression →
+// fail. everything else (transient/blocked/removed) skips.
 function classifyLiveFailure(error: unknown): {
   action: 'skip' | 'fail';
   reason: string;
@@ -94,15 +129,15 @@ function classifyLiveFailure(error: unknown): {
     const msg = error instanceof Error ? error.message : String(error);
     return { action: 'fail', reason: `unexpected crash: ${msg}` };
   }
+  if (error.emptyParse) {
+    return { action: 'fail', reason: `parser found no media: ${error.message}` };
+  }
   if (error.retryable) {
     return { action: 'skip', reason: `transient/blocked: ${error.message}` };
   }
-  if (error.expected) {
-    // access/content state, not parser bug. removed = fixture URL rotted →
-    // refresh live-cases.json.
-    return { action: 'skip', reason: `unavailable: ${error.message}` };
-  }
-  return { action: 'fail', reason: `parser found no media: ${error.message}` };
+  // access/content state, not parser bug. removed = fixture URL rotted →
+  // refresh live-cases.json.
+  return { action: 'skip', reason: `unavailable: ${error.message}` };
 }
 
 // instagram authFetch needs a logged-in cookie to see media URLs

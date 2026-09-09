@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      api: ${{ steps.filter.outputs.api }}
+      app: ${{ steps.filter.outputs.app }}
       mobile: ${{ steps.filter.outputs.mobile }}
     steps:
       - name: Checkout
@@ -39,15 +39,15 @@ jobs:
         with:
           base: ${{ github.event.before }}
           filters: |
-            backend:
-              - 'web/backend/**'
+            api:
+              - 'web/api/**'
               - 'web/shared/**'
               - 'packages/**'
               - 'package.json'
               - 'package-lock.json'
               - '.github/workflows/ci.yml'
-            frontend:
-              - 'web/frontend/**'
+            app:
+              - 'web/app/**'
               - 'web/site/**'
               - 'scripts/build-site.sh'
               - 'web/shared/**'
@@ -61,11 +61,11 @@ jobs:
               - 'package-lock.json'
               - '.github/workflows/ci.yml'
 
-  test-backend:
-    name: Test Backend
+  test-api:
+    name: Test API
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.api == 'true'
     timeout-minutes: 30
     services:
       redis:
@@ -105,14 +105,14 @@ jobs:
 
       - name: Typecheck, lint, and build
         run: |
-          cd web/backend
+          cd web/api
           npx tsc --noEmit
           npx eslint .
           npm run build
 
       - name: Run core tests
         run: |
-          cd web/backend
+          cd web/api
           npx vitest run --environment node
 
       - name: Publish test report
@@ -120,8 +120,8 @@ jobs:
         continue-on-error: true
         uses: dorny/test-reporter@v3
         with:
-          name: "Test Report: Backend"
-          path: web/backend/test-results.xml
+          name: 'Test Report: API'
+          path: web/api/test-results.xml
           reporter: jest-junit
           use-actions-summary: false
 
@@ -129,8 +129,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: backend-test-results
-          path: web/backend/test-results.xml
+          name: api-test-results
+          path: web/api/test-results.xml
           retention-days: 7
           if-no-files-found: ignore
 
@@ -138,16 +138,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: backend-coverage
-          path: web/backend/coverage
+          name: api-coverage
+          path: web/api/coverage
           retention-days: 7
           if-no-files-found: ignore
 
-  test-frontend:
-    name: Test Frontend
+  test-app:
+    name: Test App
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.app == 'true'
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -170,7 +170,7 @@ jobs:
 
       - name: Typecheck and lint
         run: |
-          cd web/frontend
+          cd web/app
           npx tsc --noEmit
           npx eslint .
 
@@ -180,9 +180,9 @@ jobs:
           npx astro sync
           npx astro check
 
-      - name: Run Frontend Tests
+      - name: Run App Tests
         run: |
-          cd web/frontend
+          cd web/app
           npx vitest run
 
       - name: Publish test report
@@ -190,17 +190,17 @@ jobs:
         continue-on-error: true
         uses: dorny/test-reporter@v3
         with:
-          name: "Test Report: Frontend"
-          path: web/frontend/test-results.xml
+          name: 'Test Report: App'
+          path: web/app/test-results.xml
           reporter: jest-junit
           use-actions-summary: false
 
-      - name: Store frontend test results
+      - name: Store app test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: frontend-test-results
-          path: web/frontend/test-results.xml
+          name: app-test-results
+          path: web/app/test-results.xml
           retention-days: 7
           if-no-files-found: ignore
 
@@ -241,7 +241,7 @@ jobs:
         continue-on-error: true
         uses: dorny/test-reporter@v3
         with:
-          name: "Test Report: Mobile"
+          name: 'Test Report: Mobile'
           path: mobile/test-results.xml
           reporter: jest-junit
           use-actions-summary: false
@@ -291,7 +291,7 @@ jobs:
         continue-on-error: true
         uses: dorny/test-reporter@v3
         with:
-          name: "Test Report: Mobile E2E (live)"
+          name: 'Test Report: Mobile E2E (live)'
           path: mobile/test-results.xml
           reporter: jest-junit
           use-actions-summary: false
@@ -325,11 +325,11 @@ jobs:
       - name: Knip
         run: npx --no-install knip
 
-  deploy-frontend:
-    name: Deploy Frontend
+  deploy-app:
+    name: Deploy App
     runs-on: ubuntu-latest
-    needs: [changes, test-frontend]
-    if: github.event_name != 'schedule' && github.ref == 'refs/heads/main' && needs.test-frontend.result == 'success'
+    needs: [changes, test-app]
+    if: github.event_name != 'schedule' && github.ref == 'refs/heads/main' && needs.test-app.result == 'success'
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -354,7 +354,7 @@ jobs:
           restore-keys: |
             ${{ env.CACHE_KEY }}-${{ runner.os }}-
 
-      - name: Build and Deploy Frontend
+      - name: Build and Deploy App
         run: |
           npm ci --ignore-scripts
           (cd web/shared && npm run build)
@@ -364,7 +364,7 @@ jobs:
           ACVER=$(python3 -c "import json; print(json.load(open('package-lock.json'))['packages']['node_modules/@astrojs/compiler-binding']['version'])")
           npm install --no-save "lightningcss-linux-x64-gnu@$VER" "@tailwindcss/oxide-linux-x64-gnu@$OXVER" "@rolldown/binding-linux-x64-gnu@$RVER" "@astrojs/compiler-binding-linux-x64-gnu@$ACVER" --ignore-scripts
           bash scripts/build-site.sh
-          cp -r web/frontend/functions web/site/dist/
+          cp -r web/app/functions web/site/dist/
           npx --yes wrangler@4.93.0 pages deploy web/site/dist --project-name c-phantom --branch main
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}

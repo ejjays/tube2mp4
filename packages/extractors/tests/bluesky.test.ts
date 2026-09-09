@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createBlueskyExtractor } from '../src/bluesky.js';
-import type { ExtractorEnv } from '../src/env.js';
+import type { ExtractorEnv } from '../src/shared/env.js';
 
 const PLAYLIST = 'https://video.bsky.app/watch/did/cid/playlist.m3u8';
 
@@ -61,7 +61,9 @@ describe('bluesky getInfo', () => {
       );
 
     const { getInfo } = createBlueskyExtractor(env);
-    const info = await getInfo('https://bsky.app/profile/u.bsky.social/post/rkey');
+    const info = await getInfo(
+      'https://bsky.app/profile/u.bsky.social/post/rkey'
+    );
     expect(info).not.toBeNull();
     expect(info?.extractorKey).toBe('bluesky');
     expect(info?.uploader).toBe('Test');
@@ -101,12 +103,14 @@ describe('bluesky getInfo', () => {
     expect(info?.formats[0].formatId).toBe('720p');
   });
 
-  it('returns null when handle cannot resolve', async () => {
+  it('throws noVideo when handle cannot resolve', async () => {
     fetchSpy
       .mockResolvedValueOnce(jsonRes({}))
       .mockResolvedValueOnce(jsonRes({ thread: {} }));
     const { getInfo } = createBlueskyExtractor(env);
-    expect(await getInfo('https://bsky.app/profile/x/post/y')).toBeNull();
+    await expect(getInfo('https://bsky.app/profile/x/post/y')).rejects.toThrow(
+      /downloadable video/iu
+    );
   });
 
   it('skipDurationFetch=true skips the duration round-trip', async () => {

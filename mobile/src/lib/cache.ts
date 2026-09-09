@@ -1,4 +1,4 @@
-import { VideoInfo } from '../extractors/shared/types';
+import { VideoInfo } from '@phantom/extractors';
 
 /* in-memory only; cdn urls expire */
 const TTL_MS = 30 * 60 * 1000;

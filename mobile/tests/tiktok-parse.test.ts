@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseUniversalData } from '../src/extractors/tiktok';
+import { parseUniversalData } from '@phantom/extractors';
 
 const rehydration = (itemStruct: unknown): string =>
   `<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">${JSON.stringify(

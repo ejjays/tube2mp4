@@ -15,12 +15,12 @@ vi.mock('react-native', () => ({
 }));
 
 import {
-  attachWebView,
-  detachWebView,
+  attachGenericWebView,
+  detachGenericWebView,
   extractFromPage,
   onWebViewFailed,
   onWebViewHttpError,
-  onWebViewMessage,
+  onGenericWebViewMessage,
   onWebViewPageEnded,
   onWebViewRequest,
 } from '../src/lib/webviewExtraction/host';
@@ -46,20 +46,20 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  detachWebView();
+  detachGenericWebView();
   vi.useRealTimers();
 });
 
 describe('webview host', () => {
   it('resolves a direct media url through a metadata probe page', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://cdn.example/video.mp4');
 
     expect(handle.navigate).toHaveBeenCalledWith(
       expect.stringContaining('data:text/html')
     );
-    onWebViewMessage(
+    onGenericWebViewMessage(
       JSON.stringify({
         type: 'pageScan',
         data: {
@@ -81,30 +81,30 @@ describe('webview host', () => {
 
   it('loads queued urls sequentially', () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
 
     const first = extractFromPage('https://a.com');
     const second = extractFromPage('https://b.com');
     expect(handle.navigate).toHaveBeenCalledTimes(1);
     expect(handle.navigate).toHaveBeenCalledWith('https://a.com');
 
-    onWebViewMessage(scanMessage('https://a.com'));
+    onGenericWebViewMessage(scanMessage('https://a.com'));
     return expect(first)
       .resolves.toMatchObject({ url: 'https://a.com' })
       .then(() => {
         expect(handle.navigate).toHaveBeenLastCalledWith('https://b.com');
-        onWebViewMessage(scanMessage('https://b.com'));
+        onGenericWebViewMessage(scanMessage('https://b.com'));
         return expect(second).resolves.toMatchObject({ url: 'https://b.com' });
       });
   });
 
   it('streams partial scans via onScan', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
 
     const onScan = vi.fn();
     const promise = extractFromPage('https://a.com', onScan);
-    onWebViewMessage(scanMessage('https://a.com'));
+    onGenericWebViewMessage(scanMessage('https://a.com'));
     await promise;
 
     expect(onScan).toHaveBeenCalledTimes(1);
@@ -113,7 +113,7 @@ describe('webview host', () => {
 
 it('injects the sniffer once per page url', () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     void extractFromPage('https://a.com');
 
     onWebViewPageEnded('https://a.com');
@@ -126,7 +126,7 @@ it('injects the sniffer once per page url', () => {
 
   it('re-injects after navigating to a new page url', () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     void extractFromPage('https://a.com');
 
     onWebViewPageEnded('https://a.com');
@@ -136,14 +136,14 @@ it('injects the sniffer once per page url', () => {
 
   it('holds empty scans until videos arrive', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     let settled: 'pending' | 'done' = 'pending';
     const promise = extractFromPage('https://a.com');
     void promise.then(() => {
       settled = 'done';
     });
 
-    onWebViewMessage(
+    onGenericWebViewMessage(
       JSON.stringify({
         type: 'pageScan',
         data: { url: 'https://a.com', title: 't', videos: [], images: [] },
@@ -152,30 +152,30 @@ it('injects the sniffer once per page url', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(settled).toBe('pending');
 
-    onWebViewMessage(scanMessage('https://a.com'));
+    onGenericWebViewMessage(scanMessage('https://a.com'));
     await expect(promise).resolves.toMatchObject({ url: 'https://a.com' });
   });
 
   it('settles null once scans stay idle past the patience floor', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
     const empty = JSON.stringify({
       type: 'pageScan',
       data: { url: 'https://a.com', title: 't', videos: [], images: [] },
     });
 
-    onWebViewMessage(empty);
-    onWebViewMessage(empty);
-    onWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
     vi.advanceTimersByTime(8_000);
-    onWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
     await expect(promise).resolves.toBeNull();
   });
 
   it('holds empty scans until the patience floor even when idle', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     let settled: 'pending' | 'done' = 'pending';
     const promise = extractFromPage('https://a.com');
     void promise.then(() => {
@@ -186,28 +186,28 @@ it('injects the sniffer once per page url', () => {
       data: { url: 'https://a.com', title: 't', videos: [], images: [] },
     });
 
-    onWebViewMessage(empty);
-    onWebViewMessage(empty);
-    onWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
     vi.advanceTimersByTime(7_000);
-    onWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
     expect(settled).toBe('pending');
 
     vi.advanceTimersByTime(2_000);
-    onWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
     await expect(promise).resolves.toBeNull();
   });
 
   it('ignores stale scans from a previous injection', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     let settled: 'pending' | 'done' = 'pending';
     const promise = extractFromPage('https://a.com');
     void promise.then(() => {
       settled = 'done';
     });
 
-    onWebViewMessage(
+    onGenericWebViewMessage(
       JSON.stringify({
         type: 'pageScan',
         id: 0,
@@ -222,7 +222,7 @@ it('injects the sniffer once per page url', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(settled).toBe('pending');
 
-    onWebViewMessage(scanMessage('https://a.com'));
+    onGenericWebViewMessage(scanMessage('https://a.com'));
     await expect(promise).resolves.toMatchObject({
       url: 'https://a.com',
       title: 't',
@@ -232,14 +232,14 @@ it('injects the sniffer once per page url', () => {
 
   it('holds placeholder-only scans until a real video arrives', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     let settled: 'pending' | 'done' = 'pending';
     const promise = extractFromPage('https://a.com');
     void promise.then(() => {
       settled = 'done';
     });
 
-    onWebViewMessage(
+    onGenericWebViewMessage(
       JSON.stringify({
         type: 'pageScan',
         data: {
@@ -253,7 +253,7 @@ it('injects the sniffer once per page url', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(settled).toBe('pending');
 
-    onWebViewMessage(scanMessage('https://a.com'));
+    onGenericWebViewMessage(scanMessage('https://a.com'));
     await expect(promise).resolves.toMatchObject({
       videos: [{ url: 'https://a.com/v.mp4' }],
     });
@@ -261,7 +261,7 @@ it('injects the sniffer once per page url', () => {
 
   it('settles captured media requests when scans go idle', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
     const empty = JSON.stringify({
       type: 'pageScan',
@@ -269,11 +269,11 @@ it('injects the sniffer once per page url', () => {
     });
 
     onWebViewRequest('https://cdn.example/live/stream.m3u8');
-    onWebViewMessage(empty);
-    onWebViewMessage(empty);
-    onWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
     vi.advanceTimersByTime(8_000);
-    onWebViewMessage(empty);
+    onGenericWebViewMessage(empty);
     await expect(promise).resolves.toMatchObject({
       videos: [{ url: 'https://cdn.example/live/stream.m3u8' }],
     });
@@ -281,7 +281,7 @@ it('injects the sniffer once per page url', () => {
 
   it('probes wide candidates in capped batches', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
     const scan = (dims: Record<string, [number, number]>) =>
       JSON.stringify({
@@ -303,15 +303,15 @@ it('injects the sniffer once per page url', () => {
         String(call[0]).includes('__phantom_probe')
       );
 
-    onWebViewMessage(scan({}));
+    onGenericWebViewMessage(scan({}));
     expect(probeCalls()).toHaveLength(4);
 
-    onWebViewMessage(
+    onGenericWebViewMessage(
       scan({ u1: [1920, 1080], u2: [1920, 1080], u3: [1920, 1080], u4: [1920, 1080] })
     );
     expect(probeCalls()).toHaveLength(6);
 
-    onWebViewMessage(
+    onGenericWebViewMessage(
       scan({
         u1: [1920, 1080],
         u2: [1920, 1080],
@@ -335,10 +335,10 @@ it('injects the sniffer once per page url', () => {
 
   it('settles with the freshest scan when probes stay silent', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
-    onWebViewMessage(
+    onGenericWebViewMessage(
       JSON.stringify({
         type: 'pageScan',
         data: {
@@ -361,26 +361,26 @@ it('injects the sniffer once per page url', () => {
 
   it('dedupes identical in-flight urls', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const first = extractFromPage('https://a.com');
     const second = extractFromPage('https://a.com');
 
     expect(handle.navigate).toHaveBeenCalledTimes(1);
-    onWebViewMessage(scanMessage('https://a.com'));
+    onGenericWebViewMessage(scanMessage('https://a.com'));
     await expect(first).resolves.toMatchObject({ url: 'https://a.com' });
     await expect(second).resolves.toMatchObject({ url: 'https://a.com' });
   });
 
   it('does not inject while idle', () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     onWebViewPageEnded('https://a.com');
     expect(handle.injectJavaScript).not.toHaveBeenCalled();
   });
 
   it('resolves null on timeout', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
     vi.advanceTimersByTime(30_000);
@@ -390,7 +390,7 @@ it('injects the sniffer once per page url', () => {
 
   it('resolves null on http error for the active page', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
     onWebViewHttpError('https://a.com');
@@ -399,19 +399,19 @@ it('injects the sniffer once per page url', () => {
 
   it('ignores http errors from subresources', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
     onWebViewHttpError('https://cdn.example/logo.png');
     expect(handle.navigate).toHaveBeenCalledTimes(1);
 
-    onWebViewMessage(scanMessage('https://a.com'));
+    onGenericWebViewMessage(scanMessage('https://a.com'));
     await expect(promise).resolves.toMatchObject({ url: 'https://a.com' });
   });
 
   it('resolves null on load failure', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
     onWebViewFailed();
@@ -420,7 +420,7 @@ it('injects the sniffer once per page url', () => {
 
   it('resolves null when app backgrounds', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
     listeners[0]('background');
@@ -429,11 +429,11 @@ it('injects the sniffer once per page url', () => {
 
   it('detach resolves pending and queued', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const first = extractFromPage('https://a.com');
     const second = extractFromPage('https://b.com');
 
-    detachWebView();
+    detachGenericWebView();
     await expect(first).resolves.toBeNull();
     await expect(second).resolves.toBeNull();
   });
@@ -471,16 +471,16 @@ describe('hls manifest probing', () => {
 
   it('fetches m3u8 manifests via __phantom_hls, not the video probe', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
-    onWebViewMessage(hlsScan());
+    onGenericWebViewMessage(hlsScan());
     expect(hlsCalls(handle)).toHaveLength(1);
     expect(handle.injectJavaScript).not.toHaveBeenCalledWith(
       expect.stringContaining('__phantom_probe')
     );
 
-    onWebViewMessage(hlsResult(variants));
+    onGenericWebViewMessage(hlsResult(variants));
     vi.advanceTimersByTime(1_500);
     await expect(promise).resolves.toMatchObject({
       url: 'https://a.com',
@@ -494,19 +494,19 @@ describe('hls manifest probing', () => {
 
   it('holds the settle while manifest fetches are in flight', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     let settled: 'pending' | 'done' = 'pending';
     const promise = extractFromPage('https://a.com');
     void promise.then(() => {
       settled = 'done';
     });
 
-    onWebViewMessage(hlsScan());
+    onGenericWebViewMessage(hlsScan());
     expect(hlsCalls(handle)).toHaveLength(1);
     vi.advanceTimersByTime(3_000);
     expect(settled).toBe('pending');
 
-    onWebViewMessage(hlsResult(variants));
+    onGenericWebViewMessage(hlsResult(variants));
     vi.advanceTimersByTime(1_500);
     await expect(promise).resolves.toMatchObject({
       videos: [
@@ -519,11 +519,11 @@ describe('hls manifest probing', () => {
 
   it('settles with the raw manifest when the fetch yields no variants', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
-    onWebViewMessage(hlsScan());
-    onWebViewMessage(hlsResult([]));
+    onGenericWebViewMessage(hlsScan());
+    onGenericWebViewMessage(hlsResult([]));
     vi.advanceTimersByTime(1_500);
     await expect(promise).resolves.toMatchObject({
       videos: [{ url: 'https://cdn.example/hls/master.m3u8' }],
@@ -532,19 +532,19 @@ describe('hls manifest probing', () => {
 
   it('ignores stale hls results from a previous injection', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     let settled: 'pending' | 'done' = 'pending';
     const promise = extractFromPage('https://a.com');
     void promise.then(() => {
       settled = 'done';
     });
 
-    onWebViewMessage(hlsScan());
-    onWebViewMessage(JSON.stringify({ ...JSON.parse(hlsResult(variants)), id: 0 }));
+    onGenericWebViewMessage(hlsScan());
+    onGenericWebViewMessage(JSON.stringify({ ...JSON.parse(hlsResult(variants)), id: 0 }));
     vi.advanceTimersByTime(1_500);
     expect(settled).toBe('pending');
 
-    onWebViewMessage(hlsResult(variants));
+    onGenericWebViewMessage(hlsResult(variants));
     vi.advanceTimersByTime(1_500);
     await expect(promise).resolves.toMatchObject({
       videos: [
@@ -559,11 +559,11 @@ describe('hls manifest probing', () => {
 describe('media request interception', () => {
   it('records media requests into the final scan', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
     onWebViewRequest('https://cdn.example/video.mp4');
-    onWebViewMessage(scanMessage('https://a.com'));
+    onGenericWebViewMessage(scanMessage('https://a.com'));
     const scan = await promise;
 
     expect(scan?.videos.map((video) => video.url)).toEqual([
@@ -574,7 +574,7 @@ describe('media request interception', () => {
 
   it('holds a direct media paste until the probe reports dims', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     let settled: 'pending' | 'done' = 'pending';
     const promise = extractFromPage('https://cdn.example/movie.m3u8');
     void promise.then(() => {
@@ -589,7 +589,7 @@ describe('media request interception', () => {
       expect.stringContaining('data:text/html')
     );
 
-    onWebViewMessage(
+    onGenericWebViewMessage(
       JSON.stringify({
         type: 'pageScan',
         data: {
@@ -615,10 +615,10 @@ describe('media request interception', () => {
 
   it('settles a direct media paste plain when metadata stays silent', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://cdn.example/movie.mov');
 
-    onWebViewMessage(
+    onGenericWebViewMessage(
       JSON.stringify({
         type: 'pageScan',
         data: {
@@ -639,10 +639,10 @@ describe('media request interception', () => {
 
   it('probes xhr-sourced streams and upgrades dims when metadata loads', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
-    onWebViewMessage(
+    onGenericWebViewMessage(
       JSON.stringify({
         type: 'pageScan',
         data: {
@@ -656,7 +656,7 @@ describe('media request interception', () => {
     expect(handle.injectJavaScript).toHaveBeenCalledWith(
       expect.stringContaining('__phantom_probe("https://cdn.example/stream.mov")')
     );
-    onWebViewMessage(
+    onGenericWebViewMessage(
       JSON.stringify({
         type: 'pageScan',
         data: {
@@ -676,12 +676,12 @@ describe('media request interception', () => {
 
   it('ignores non-media requests', async () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     const promise = extractFromPage('https://a.com');
 
     onWebViewRequest('https://cdn.example/style.css');
     onWebViewRequest('https://cdn.example/banner.jpg');
-    onWebViewMessage(scanMessage('https://a.com'));
+    onGenericWebViewMessage(scanMessage('https://a.com'));
     const scan = await promise;
 
     expect(scan?.videos.map((video) => video.url)).toEqual([
@@ -691,7 +691,7 @@ describe('media request interception', () => {
 
   it('ignores requests while idle', () => {
     const handle = makeHandle();
-    attachWebView(handle);
+    attachGenericWebView(handle);
     onWebViewRequest('https://cdn.example/video.mp4');
     expect(handle.navigate).not.toHaveBeenCalled();
   });

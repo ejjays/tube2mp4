@@ -74,7 +74,7 @@ const phantomPlugin = {
         },
         messages: {
           useIconFile:
-            "Inline <svg> detected. Icons belong in a dedicated icon module (mobile: components/icons.tsx or FormatIcons.tsx; frontend: assets/icons/*) — don't hardcode raw SVG in feature components.",
+            "Inline <svg> detected. Icons belong in a dedicated icon module (mobile: components/icons.tsx or FormatIcons.tsx; app: assets/icons/*) — don't hardcode raw SVG in feature components.",
         },
       },
       create(context) {

@@ -8,13 +8,13 @@ If anything here is unclear, don't worry about getting it perfect — open an is
 
 Phantom is a multi-target repo:
 
-| Target         | Path            | Stack                                                 |
-| -------------- | --------------- | ----------------------------------------------------- |
-| Web backend    | `web/backend/`  | Express 5 + TS, yt-dlp, ffmpeg, Redis, Turso          |
-| Web frontend   | `web/frontend/` | React 19 + Vite, Tailwind + Styled Components         |
-| Shared schemas | `web/shared/`   | Zod schemas (`@phantom/shared`)                       |
-| Android app    | `mobile/`       | Expo SDK 57, RN 0.86, Hermes, New Architecture        |
-| Packages       | `packages/`     | `@phantom/extractors`, `@phantom/web-mux` (both MIT)  |
+| Target         | Path          | Stack                                                |
+| -------------- | ------------- | ---------------------------------------------------- |
+| Web API        | `web/api/`    | Express 5 + TS, yt-dlp, ffmpeg, Redis, Turso         |
+| Web app        | `web/app/`    | React 19 + Vite, Tailwind + Styled Components        |
+| Shared schemas | `web/shared/` | Zod schemas (`@phantom/shared`)                      |
+| Android app    | `mobile/`     | Expo SDK 57, RN 0.86, Hermes, New Architecture       |
+| Packages       | `packages/`   | `@phantom/extractors`, `@phantom/web-mux` (both MIT) |
 
 ## Getting Set Up
 
@@ -26,8 +26,8 @@ Prerequisites and install steps live in [`docs/run-an-instance.md`](docs/run-an-
 Once that's done:
 
 ```bash
-npm run api      # backend (dev, :5000)
-npm run ui       # frontend (Vite dev server)
+npm run api      # api (dev, :5000)
+npm run ui       # app (Vite dev server)
 npm run check    # typecheck + lint on changed files — fast, run often
 npm run check:all # same across whole repo — run before opening a PR
 ```
@@ -37,16 +37,16 @@ npm run check:all # same across whole repo — run before opening a PR
 GitHub CI is the suite runner — full suites don't run on-device. Locally, run only the single test file relevant to your change:
 
 ```bash
-cd web/frontend && node ../../node_modules/vitest/vitest.mjs run tests/<file>.test.ts
+cd web/app && node ../../node_modules/vitest/vitest.mjs run tests/<file>.test.ts
 ```
 
-(same pattern from `web/backend` and `mobile`; the direct `node` path sidesteps Termux's bin-shebang issue). For everything else, push your branch and let CI run it: frontend, mobile, backend (with Redis), and live extractor checks.
+(same pattern from `web/api` and `mobile`; the direct `node` path sidesteps Termux's bin-shebang issue). For everything else, push your branch and let CI run it: app, mobile, api (with Redis), and live extractor checks.
 
 If you're fixing a bug or adding a feature, a test that covers it really helps — ideally one that fails first, then passes. Mocking external calls (YouTube, Spotify, Redis) keeps tests fast and offline.
 
 ## Continuous Integration
 
-CI runs on GitHub Actions — see [`.github/workflows/`](.github/workflows/). `ci.yml` ("Checks") path-filters by workspace and runs typecheck + lint + tests for backend/frontend/mobile, plus mobile live extractor checks and a Cloudflare Pages deploy on `main`. `audit.yml` scans dependencies (lockfile signature, `npm audit`, OSV-Scanner), `codeql.yml` runs CodeQL, and `build-apk.yml` builds Android APKs on demand via EAS. Nothing to configure locally beyond `npm run check`.
+CI runs on GitHub Actions — see [`.github/workflows/`](.github/workflows/). `ci.yml` ("Checks") path-filters by workspace and runs typecheck + lint + tests for api/app/mobile, plus mobile live extractor checks and a Cloudflare Pages deploy on `main`. `audit.yml` scans dependencies (lockfile signature, `npm audit`, OSV-Scanner), `codeql.yml` runs CodeQL, and `build-apk.yml` builds Android APKs on demand via EAS. Nothing to configure locally beyond `npm run check`.
 
 ## Conventions
 

@@ -1,4 +1,11 @@
-import { VideoInfo, Format } from '../shared/types';
+import {
+  VideoInfo,
+  Format,
+  noVideo,
+  temporaryError,
+  classifyThrown,
+  buildVideoInfo,
+} from '@phantom/extractors';
 import {
   extractViaWebView,
   playlistViaWebView,
@@ -6,10 +13,8 @@ import {
   type RawYtResult,
   type RawYtPlaylist,
 } from './bridge';
-import { noVideo, temporaryError, classifyThrown } from '../shared/errors';
 import { DESKTOP_UA } from '../../lib/userAgents';
 import { getYoutubeCookie } from '../../lib/settings';
-import { buildVideoInfo } from '../shared/videoInfo';
 
 const YT_ID =
   /(?:v=|\/v\/|youtu\.be\/|shorts\/|live\/|embed\/)([0-9A-Za-z_-]{11})/u;

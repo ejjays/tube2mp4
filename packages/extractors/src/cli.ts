@@ -3,9 +3,9 @@ import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { Readable, Writable } from 'node:stream';
 import { getExtractor } from './index.js';
-import { defaultEnv } from './env.js';
-import { VideoInfo, Format } from './types.js';
-import { ExtractorEnv } from './env.js';
+import { defaultEnv } from './shared/env.js';
+import { VideoInfo, Format } from './shared/types.js';
+import { ExtractorEnv } from './shared/env.js';
 
 const usage = `usage:
   phantom-x info <url>                        print resolved metadata as json

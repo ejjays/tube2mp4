@@ -5,7 +5,11 @@ vi.mock('../src/lib/net', () => ({
 }));
 
 import { gatedFetch } from '../src/lib/net';
-import { getInfo, parseSpotlightId } from '../src/extractors/snapchat';
+import { createSnapchatExtractor, parseSpotlightId } from '@phantom/extractors';
+import { mobileSharedEnv } from '../src/extractors/shared/env';
+
+const getInfo = (url: string) =>
+  createSnapchatExtractor(mobileSharedEnv).getInfo(url);
 
 const mockFetch = vi.mocked(gatedFetch);
 

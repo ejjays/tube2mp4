@@ -30,7 +30,7 @@ R2 will hand you a `pub-*.r2.dev` public URL, but Cloudflare's own docs say it's
 - Cloudflare edge-caches each image (keys are immutable), so R2 is barely hit
 - No custom domain to buy
 
-The function lives in the frontend repo at [`web/frontend/functions/i/[[path]].ts`](../web/frontend/functions/i/[[path]].ts). It only serves `comments/*.webp` keys, so it can't probe the rest of the bucket.
+The function lives in the app at [`web/app/functions/i/[[path]].ts`](../web/app/functions/i/[[path]].ts). It only serves `comments/*.webp` keys, so it can't probe the rest of the bucket.
 
 ## Setup
 
@@ -54,14 +54,14 @@ R2_PUBLIC_BASE         https://c-phantom.pages.dev/i
 ### Serving Function (Cloudflare Pages)
 
 1. Cloudflare → your Pages project → Settings → Functions → **R2 bindings** → add binding: variable name `UPLOADS` → bucket `phantom-uploads`.
-2. The function file (`functions/i/[[path]].ts`) is already in the frontend repo; the next Pages deploy picks it up. It serves `https://c-phantom.pages.dev/i/comments/...`.
+2. The function file (`functions/i/[[path]].ts`) is already in the app; the next Pages deploy picks it up. It serves `https://c-phantom.pages.dev/i/comments/...`.
 
 ### Delete Function (Cloudflare Pages + Supabase Webhook)
 
 When a comment (or its row's parent via cascade) is deleted, a Supabase database webhook posts to another Pages Function that drops the R2 object. Catches direct deletes and cascades (profile → comments), so nothing orphans in R2.
 
 1. Cloudflare → the Pages project → Settings → Variables and Secrets → add a **secret** `WEBHOOK_SECRET` (any long random string — `openssl rand -hex 32`). The `UPLOADS` R2 binding from the serving function is reused, no changes needed.
-2. The function file (`functions/comment-deleted.ts`) is already in the frontend repo; the next Pages deploy picks it up. Its route is `https://c-phantom.pages.dev/comment-deleted`.
+2. The function file (`functions/comment-deleted.ts`) is already in the app; the next Pages deploy picks it up. Its route is `https://c-phantom.pages.dev/comment-deleted`.
 3. Supabase → Database → **Webhooks** → Create a webhook:
    - Name: `r2-comment-cleanup`
    - Table: `public.comments`, Event: **Delete**
@@ -87,5 +87,5 @@ where image_url is not null
 ## Notes
 
 - Images are immutable (keyed by random uuid), so they're cached `max-age=31536000, immutable` — an edit uploads a new object rather than overwriting.
-- Deleting a comment triggers a Supabase database webhook that hits [`comment-deleted`](../web/frontend/functions/comment-deleted.ts), which parses the row's `image_url` & drops the R2 object. Cascades (profile → comments) fire the webhook too, so orphans don't accumulate.
+- Deleting a comment triggers a Supabase database webhook that hits [`comment-deleted`](../web/app/functions/comment-deleted.ts), which parses the row's `image_url` & drops the R2 object. Cascades (profile → comments) fire the webhook too, so orphans don't accumulate.
 - The R2 secret keys live only in the `r2-upload-url` function secrets — never in the app.

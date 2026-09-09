@@ -32,7 +32,7 @@ Clone the repo — no `npm install` needed, the worker uses only Node built-ins:
 cd ~ && git clone https://github.com/ejjays/phantom.git
 ```
 
-Create `~/phantom/web/backend/.env` with the values that match Koyeb (see [`env-variables.md`](env-variables.md)):
+Create `~/phantom/web/api/.env` with the values that match Koyeb (see [`env-variables.md`](env-variables.md)):
 
 ```bash
 YTDLP_REMOTE_SECRET=<same value as Koyeb>   # required — HMAC secret, byte-identical
@@ -92,7 +92,7 @@ The watchdog publishes the URL to Turso (`configs.YTDLP_SERVICE_URL`); the backe
 ## What's Running
 
 - `scripts/tunnels/ytdlp-service.cjs` — the worker (`/health`, `/ytdlp`, `/media`) on `127.0.0.1:5055`, Node built-ins only.
-- `scripts/tunnels/keepalive-ytdlp.sh` — the watchdog: loads `web/backend/.env`, runs the service + cloudflared, health-checks both, publishes the URL, loops every 20s.
+- `scripts/tunnels/keepalive-ytdlp.sh` — the watchdog: loads `web/api/.env`, runs the service + cloudflared, health-checks both, publishes the URL, loops every 20s.
 - `scripts/tunnels/ensure-ytdlp.sh` + `setup-resilience.sh` — the Android job that relaunches the watchdog if it's killed.
 - `~/.termux/boot/start-phantom.sh` — starts it on boot.
 

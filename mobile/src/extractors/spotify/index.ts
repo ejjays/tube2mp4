@@ -1,4 +1,16 @@
-import { VideoInfo, ExtractorError } from '../shared/types';
+import {
+  VideoInfo,
+  ExtractorError,
+  noVideo,
+  temporaryError,
+  buildVideoInfo,
+} from '@phantom/extractors';
+import {
+  mergeSpotifyMeta,
+  metaFromEmbed as sharedMetaFromEmbed,
+  metaFromOdesli as sharedMetaFromOdesli,
+  type SpotifyMeta,
+} from '@phantom/extractors/spotify';
 import { resolveViaYoutube, buildFromYoutube } from '../youtube/isrcMatch';
 
 // reexported for callers/tests that predate the shared isrcMatch module
@@ -13,20 +25,9 @@ import {
   type OdesliResult,
 } from './api';
 import { lookupSpotifyMapping } from '../../lib/social/registry';
-import { noVideo, temporaryError } from '../shared/errors';
-import { buildVideoInfo } from '../shared/videoInfo';
 import { log } from '../../lib/log';
 
-type Meta = {
-  id: string;
-  title: string;
-  artist: string;
-  album?: string;
-  cover?: string;
-  durationMs: number;
-  isrc?: string;
-  previewUrl?: string;
-};
+type Meta = SpotifyMeta;
 
 function partial(meta: Meta, url: string): VideoInfo {
   return buildVideoInfo({
@@ -48,6 +49,7 @@ function metaFromSpotify(id: string, track: SpotifyTrack): Meta {
     id,
     title: track.title,
     artist: track.artist,
+    album: track.album,
     cover: track.cover,
     durationMs: track.durationMs,
     isrc: track.isrc,
@@ -55,30 +57,8 @@ function metaFromSpotify(id: string, track: SpotifyTrack): Meta {
   };
 }
 
-function metaFromEmbed(id: string, embed: SpotifyEmbed): Meta | null {
-  if (!embed.title || !embed.artist) return null;
-  return {
-    id,
-    title: embed.title,
-    artist: embed.artist,
-    cover: embed.cover,
-    durationMs: embed.durationMs || 0,
-    isrc: embed.isrc,
-    previewUrl: embed.previewUrl,
-  };
-}
-
-function metaFromOdesli(id: string, odesli: OdesliResult): Meta | null {
-  if (!odesli.title || !odesli.artist) return null;
-  return {
-    id,
-    title: odesli.title,
-    artist: odesli.artist,
-    cover: odesli.cover,
-    durationMs: 0,
-    isrc: odesli.isrc,
-  };
-}
+const metaFromEmbed = sharedMetaFromEmbed;
+const metaFromOdesli = sharedMetaFromOdesli;
 
 // earliest source with title+artist, for a fast first paint
 async function firstPaintMeta(
@@ -107,9 +87,6 @@ async function firstPaintMeta(
   }
 }
 
-const firstOf = <T>(...values: (T | undefined | null)[]): T | undefined =>
-  values.find((value): value is T => Boolean(value));
-
 // prefer api > embed > odesli for the authoritative meta
 function mergeMeta(
   id: string,
@@ -117,19 +94,7 @@ function mergeMeta(
   spotify: SpotifyTrack | null,
   odesli: OdesliResult | null
 ): Meta | null {
-  const title = firstOf(spotify?.title, embed?.title, odesli?.title);
-  const artist = firstOf(spotify?.artist, embed?.artist, odesli?.artist);
-  if (!title || !artist) return null;
-  return {
-    id,
-    title,
-    artist,
-    album: spotify?.album,
-    cover: firstOf(spotify?.cover, embed?.cover, odesli?.cover),
-    durationMs: firstOf(spotify?.durationMs, embed?.durationMs) ?? 0,
-    isrc: firstOf(spotify?.isrc, embed?.isrc, odesli?.isrc),
-    previewUrl: firstOf(spotify?.previewUrl, embed?.previewUrl),
-  };
+  return mergeSpotifyMeta(id, embed, spotify, odesli);
 }
 
 // null = no cached hit, fall through to fresh resolve

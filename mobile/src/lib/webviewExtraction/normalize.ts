@@ -1,4 +1,4 @@
-import { VideoInfo, Format } from '../../extractors/shared/types';
+import { VideoInfo, Format } from '@phantom/extractors';
 import { DESKTOP_UA } from '../userAgents';
 import { PageScan, dedupeVideos, extensionOf, hashUrl } from './sniffer';
 

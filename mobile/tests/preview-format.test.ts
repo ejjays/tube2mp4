@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { previewableFormat } from '../src/lib/format';
-import type { Format } from '../src/extractors/shared/types';
+import type { Format } from '@phantom/extractors';
 
 const makeFormat = (over: Partial<Format>): Format => ({
   formatId: 'f1',

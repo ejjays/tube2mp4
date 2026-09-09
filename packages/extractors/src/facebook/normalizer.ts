@@ -1,6 +1,7 @@
-import { VideoInfo, Format } from '../types.js';
-import { normalizeTitle, normalizeArtist } from '../social.js';
+import { VideoInfo, Format } from '../shared/types.js';
+import { normalizeTitle, normalizeArtist } from '../shared/social.js';
 import { FbParsed } from './types.js';
+import { buildVideoInfo } from '../shared/fetch.js';
 
 export function normalizeVideoInfo(
   url: string,
@@ -44,8 +45,7 @@ export function normalizeVideoInfo(
 
   if (formats.length === 0) return null;
 
-  const info: VideoInfo = {
-    type: 'video',
+  const info = buildVideoInfo({
     id: parsedData.id || url,
     title: parsedData.title || 'Facebook Video',
     uploader: parsedData.uploader || 'Facebook User',
@@ -53,12 +53,8 @@ export function normalizeVideoInfo(
     thumbnail: parsedData.thumbnail || undefined,
     formats,
     extractorKey: 'facebook',
-    isJsInfo: true,
-    fromBrain: false,
-    isPartial: false,
-    isIsrcMatch: false,
     isFullData: false,
-  };
+  });
 
   if (parsedData.title) {
     info.metascraper = { title: parsedData.title };

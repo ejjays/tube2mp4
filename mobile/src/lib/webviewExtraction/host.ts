@@ -153,12 +153,12 @@ function injectSniffer(url: string): void {
   handle?.injectJavaScript(`window.__phantom_scan_id=${scanCounter};${SNIFFER_JS}`);
 }
 
-export function attachWebView(webview: WebViewHandle): void {
+export function attachGenericWebView(webview: WebViewHandle): void {
   handle = webview;
   pump();
 }
 
-export function detachWebView(): void {
+export function detachGenericWebView(): void {
   handle = null;
   while (queue.length > 0) {
     const pending = queue.shift();
@@ -179,7 +179,7 @@ function scanIdOf(raw: string): number | undefined {
   }
 }
 
-export function onWebViewMessage(raw: string): void {
+export function onGenericWebViewMessage(raw: string): void {
   const hls = parseHlsMessage(raw);
   if (hls) {
     if (!active) return;

@@ -1,6 +1,6 @@
 # Mobile App (Android)
 
-Phantom has a standalone **Android app** (`mobile/`) — a native React Native / Expo build that runs the **entire pipeline on the phone**: resolve → download → mux → save. It talks to no backend and deliberately shares no code with `web/backend/`.
+Phantom has a standalone **Android app** (`mobile/`) — a native React Native / Expo build that runs the **entire pipeline on the phone**: resolve → download → mux → save. It talks to no backend and deliberately shares no code with `web/api/`.
 
 ## Why On-Device
 

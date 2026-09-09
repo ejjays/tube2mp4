@@ -4,7 +4,7 @@
  */
 import path from 'node:path';
 
-const WORKSPACES = ['web/backend', 'web/frontend', 'mobile'];
+const WORKSPACES = ['web/api', 'web/app', 'mobile'];
 const isCode = (file) => /\.(ts|tsx|js|jsx|cjs|mjs)$/.test(file);
 
 export default (files) => {

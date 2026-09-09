@@ -1,8 +1,16 @@
-import { Format, VideoInfo, ExtractorOptions } from './types.js';
-import { ExtractorEnv, defaultEnv } from './env.js';
-import { normalizeTitle, normalizeArtist } from './social.js';
-import { DESKTOP_UA, decodeEntities } from './util.js';
-import { notFound, noVideo, fromStatus, classifyThrown, ExtractorError } from './errors.js';
+import { Format, VideoInfo, ExtractorOptions } from './shared/types.js';
+import { ExtractorEnv, defaultEnv } from './shared/env.js';
+import { normalizeTitle, normalizeArtist } from './shared/social.js';
+import { DESKTOP_UA, decodeEntities } from './shared/util.js';
+import {
+  notFound,
+  noVideo,
+  fromStatus,
+  classifyThrown,
+  ExtractorError,
+} from './shared/errors.js';
+import { hostOf } from './shared/host.js';
+import { envFetch, selectFormat, buildVideoInfo } from './shared/fetch.js';
 
 const REFERER = 'https://www.pinterest.com/';
 const PIDGETS_API = 'https://widgets.pinterest.com/v3/pidgets/pins/info/';
@@ -58,26 +66,56 @@ function uploaderFrom(pin: PidgetsPin): string {
   );
 }
 
-export function parsePinId(url: string): string | null {
-  const m = url.match(/(?:^|\.)pinterest\.[a-z.]{2,7}\/pin\/(?:[\w-]+--)?(\d+)/iu);
-  return m ? m[1] : null;
-}
+const PIN_PATH_RE = /\/pin\/(?:[\w-]+--)?(\d+)/iu;
 
-function isPinterestHost(url: string): boolean {
-  const host = url.replace(/^https?:\/\//iu, '').split(/[/?#]/u)[0].toLowerCase();
+export function isPinterestHost(url: string): boolean {
+  const host = hostOf(url);
   if (host === 'pin.it') return true;
   return /(?:^|\.)pinterest\.(?:[a-z]{2,4}|com?\.[a-z]{2})$/u.test(host);
 }
 
-async function resolveShortLink(env: ExtractorEnv, url: string): Promise<string> {
+// Gate on isPinterestHost(), not a literal "pinterest." prefix: apex
+// (pinterest.com) and ccTLDs must keep parsing, or the router sends them
+// here and they resolve to null.
+export function parsePinId(url: string): string | null {
+  if (!isPinterestHost(url)) return null;
+  const m = url.match(PIN_PATH_RE);
+  return m ? m[1] : null;
+}
+
+async function resolveShortLink(
+  env: ExtractorEnv,
+  url: string
+): Promise<string> {
+  // A refused HEAD falls through to GET, but a transport failure must
+  // propagate or it reads as "pin not found".
+  let headRefused = false;
   try {
-    const res = await env.fetch(url, { method: 'HEAD', redirect: 'follow', headers: { 'User-Agent': DESKTOP_UA } } as RequestInit);
-    if (res.ok || res.status < 400) return (res as unknown as { url: string }).url ?? url;
-  } catch {
-    /* HEAD refused */
+    const res = await envFetch(env, url, {
+      method: 'HEAD',
+      redirect: 'follow',
+      headers: { 'User-Agent': DESKTOP_UA },
+    } as RequestInit);
+    if (res.ok || res.status < 400)
+      return (res as unknown as { url: string }).url ?? url;
+    headRefused = true;
+  } catch (error: unknown) {
+    if (!isHttpFailure(error)) throw error;
+    headRefused = true;
   }
-  const res = await env.fetch(url, { redirect: 'follow', headers: { 'User-Agent': DESKTOP_UA } } as RequestInit);
-  return (res as unknown as { url: string }).url ?? url;
+  if (headRefused) {
+    const res = await envFetch(env, url, {
+      redirect: 'follow',
+      headers: { 'User-Agent': DESKTOP_UA },
+    } as RequestInit);
+    return (res as unknown as { url: string }).url ?? url;
+  }
+  return url;
+}
+
+function isHttpFailure(error: unknown): boolean {
+  const status = (error as { status?: number })?.status;
+  return typeof status === 'number' && status > 0;
 }
 
 function buildFormats(videoList: Record<string, PinVideoEntry>): Format[] {
@@ -111,7 +149,10 @@ function buildFormats(videoList: Record<string, PinVideoEntry>): Format[] {
       formatId: height > 0 ? `${height}p` : key.toLowerCase(),
       url: entry.url,
       extension: 'mp4',
-      resolution: entry.width && entry.height ? `${entry.width}x${entry.height}` : undefined,
+      resolution:
+        entry.width && entry.height
+          ? `${entry.width}x${entry.height}`
+          : undefined,
       quality: height > 0 ? `${height}p` : undefined,
       width: entry.width,
       height: entry.height,
@@ -140,20 +181,27 @@ function pickVideoList(pin: PidgetsPin): Record<string, PinVideoEntry> | null {
 }
 
 export function createPinterestExtractor(env: ExtractorEnv = defaultEnv) {
-  async function getInfo(url: string, _opts: ExtractorOptions = {}): Promise<VideoInfo | null> {
+  async function getInfo(
+    url: string,
+    _opts: ExtractorOptions = {}
+  ): Promise<VideoInfo | null> {
     if (!isPinterestHost(url)) return null;
-    const isShort = /(?:^|\/\/)pin\.it\//iu.test(url);
-    let target = url;
-    if (isShort) target = await resolveShortLink(env, url);
-    const id = parsePinId(target);
-    if (!id) {
-      if (isShort) throw notFound('Pinterest', 'pin');
-      return null;
-    }
     try {
-      const res = await env.fetch(`${PIDGETS_API}?pin_ids=${encodeURIComponent(id)}`, {
-        headers: { 'User-Agent': DESKTOP_UA, Referer: REFERER },
-      });
+      const isShort = /(?:^|\/\/)pin\.it\//iu.test(url);
+      let target = url;
+      if (isShort) target = await resolveShortLink(env, url);
+      const id = parsePinId(target);
+      if (!id) {
+        if (isShort) throw notFound('Pinterest', 'pin');
+        return null;
+      }
+      const res = await envFetch(
+        env,
+        `${PIDGETS_API}?pin_ids=${encodeURIComponent(id)}`,
+        {
+          headers: { 'User-Agent': DESKTOP_UA, Referer: REFERER },
+        }
+      );
       if (!res.ok) throw fromStatus(res.status, 'Pinterest', 'pin');
       const body = (await res.json()) as PidgetsResponse;
       const pin = body.data?.[0];
@@ -164,8 +212,7 @@ export function createPinterestExtractor(env: ExtractorEnv = defaultEnv) {
       if (formats.length === 0) throw noVideo('Pinterest');
       const first = Object.values(videoList).find((e) => e.url);
       const durationMs = first?.duration ?? 0;
-      const info: VideoInfo = {
-        type: 'video',
+      const info = buildVideoInfo({
         id: pin.id ?? id,
         title: titleFrom(pin),
         uploader: uploaderFrom(pin),
@@ -174,15 +221,12 @@ export function createPinterestExtractor(env: ExtractorEnv = defaultEnv) {
         duration: durationMs > 0 ? Math.round(durationMs / 1000) : undefined,
         formats,
         extractorKey: 'pinterest',
-        isJsInfo: true,
-        fromBrain: false,
-        isPartial: false,
-        isIsrcMatch: false,
-        isFullData: true,
         downloadHeaders: { 'User-Agent': DESKTOP_UA, Referer: REFERER },
-      };
+      });
       info.title = normalizeTitle(info as unknown as Record<string, unknown>);
-      info.uploader = normalizeArtist(info as unknown as Record<string, unknown>);
+      info.uploader = normalizeArtist(
+        info as unknown as Record<string, unknown>
+      );
       return info;
     } catch (error: unknown) {
       if (error instanceof ExtractorError) throw error;
@@ -190,11 +234,12 @@ export function createPinterestExtractor(env: ExtractorEnv = defaultEnv) {
     }
   }
 
-  function getStream(videoInfo: VideoInfo, options: ExtractorOptions = {}): Promise<ReadableStream> {
-    const selected =
-      videoInfo.formats.find((f) => String(f.formatId) === String(options.formatId)) ??
-      videoInfo.formats[0];
-    if (!selected?.url) throw new Error('No stream URL');
+  function getStream(
+    videoInfo: VideoInfo,
+    options: ExtractorOptions = {}
+  ): Promise<ReadableStream> {
+    const selected = selectFormat(videoInfo, options);
+    if (!selected?.url) throw noVideo('Pinterest');
     if (selected.isHls || selected.url.includes('.m3u8')) {
       if (!env.remuxHls) throw new Error('HLS needs remuxHls');
       return env.remuxHls(selected.url, {});

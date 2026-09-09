@@ -64,11 +64,11 @@ Phantom downloads 4K+ video and audio. It pushes heavy media work onto your devi
 | X / Twitter | ✅  |   ✅   |  ✅   |  ✅   |   ➖   | videos & gifs only                         |
 | Bluesky     | ✅  |   ✅   |  ✅   |  ❌   |   ➖   | hls only, no audio                         |
 | Vimeo       | ✅  |   ✅   |  ✅   |  ❌   |   ➖   | hls only, no audio                         |
-| Dailymotion | ❌  |   ✅   |  ✅   |  ❌   |   ➖   | hls only, no audio                         |
-| Reddit      | ❌  |   ✅   |  ✅   |  ✅   |   ➖   |                                            |
-| Pinterest   | ❌  |   ✅   |  ✅   |  ✅   |   ✅   | video pins + photos                        |
-| Twitch      | ❌  |   ✅   |  ✅   |  ❌   |   ➖   | clips, hls only                            |
-| Snapchat    | ❌  |   ✅   |  ✅   |  ✅   |   ➖   | spotlight videos + t.snapchat.com shorts   |
+| Dailymotion | ✅  |   ✅   |  ✅   |  ❌   |   ➖   | hls only, no audio                         |
+| Reddit      | ✅  |   ✅   |  ✅   |  ✅   |   ➖   |                                            |
+| Pinterest   | ✅  |   ✅   |  ✅   |  ✅   |   ✅   | video pins + photos                        |
+| Twitch      | ✅  |   ✅   |  ✅   |  ❌   |   ➖   | clips, hls only                            |
+| Snapchat    | ✅  |   ✅   |  ✅   |  ✅   |   ➖   | spotlight videos + t.snapchat.com shorts   |
 
 ---
 
@@ -80,15 +80,15 @@ git clone https://github.com/ejjays/phantom.git
 cd phantom
 
 npm install              # root tooling (husky, prettier)
-npm run install:web      # installs frontend, backend, shared
+npm run install:web      # installs app, api, shared
 
 # Create env files (see docs/env-variables.md)
-cp web/backend/.env.example web/backend/.env
-cp web/frontend/.env.example web/frontend/.env
+cp web/api/.env.example web/api/.env
+cp web/app/.env.example web/app/.env
 
 # Dev (two terminals)
-npm run api   # backend on :5000
-npm run ui    # frontend dev server
+npm run api   # api on :5000
+npm run ui    # app dev server
 ```
 
 **Production-style:**
@@ -96,14 +96,14 @@ npm run ui    # frontend dev server
 ```bash
 npm run build:api
 npm run build:ui
-cd web/backend && npm start
+cd web/api && npm start
 ```
 
-**Docker (backend only):**
+**Docker (api only):**
 
 ```bash
-docker build -f web/backend/Dockerfile -t phantom .
-docker run -p 8000:8000 --env-file web/backend/.env phantom
+docker build -f web/api/Dockerfile -t phantom .
+docker run -p 8000:8000 --env-file web/api/.env phantom
 ```
 
 ---
@@ -127,8 +127,9 @@ Prebuilt APKs: built via EAS on GitHub Actions (`build-apk.yml`, `eas build --lo
 ```
 phantom/
 ├── web/
-│   ├── frontend/       # React 19 + Vite + Tailwind + Styled Components
-│   ├── backend/        # Express 5 + yt-dlp + ffmpeg + Redis + Turso
+│   ├── app/            # React 19 + Vite + Tailwind + Styled Components
+│   ├── api/            # Express 5 + yt-dlp + ffmpeg + Redis + Turso
+│   ├── site/           # Astro landing page (merges app under /app/ at deploy)
 │   └── shared/         # @phantom/shared (Zod schemas)
 ├── mobile/             # Expo SDK 57, RN 0.86, Hermes, New Arch
 │   ├── src/extractors/ # 16 pure-JS platform extractors
@@ -145,7 +146,7 @@ phantom/
 
 - **No server for mobile** — each phone is its own residential IP + compute. Avoids datacenter bot-blocks and OOM kills on free tiers.
 - **Client-side muxing is primary** — `mediabunny` (pure-JS muxer) runs in a Web Worker, streams to OPFS. Server fallback via `ffmpeg -c copy` only when client mux fails or browser unsupported.
-- **Googlevideo throttle bypass** — backend uses 8 MB ranged chunks, mobile uses 4 MB. Both parallel with per-chunk retry.
+- **Googlevideo throttle bypass** — api uses 8 MB ranged chunks, mobile uses 4 MB. Both parallel with per-chunk retry.
 
 ---
 
@@ -158,7 +159,7 @@ phantom/
 | [`docs/protect-an-instance.md`](docs/protect-an-instance.md) | Hardening a public deployment (API key, URL signing, rate limits, TLS) |
 | [`docs/api.md`](docs/api.md)                                 | Endpoint contracts, request/response shapes, SSE events                |
 | [`docs/mobile-app.md`](docs/mobile-app.md)                   | Android app architecture, extractors, download pipeline, EAS build     |
-| [`docs/phone-worker-setup.md`](docs/phone-worker-setup.md)   | Legacy: using a spare phone as yt-dlp/media relay for web backend      |
+| [`docs/phone-worker-setup.md`](docs/phone-worker-setup.md)   | Legacy: using a spare phone as yt-dlp/media relay for the web API      |
 
 ---
 

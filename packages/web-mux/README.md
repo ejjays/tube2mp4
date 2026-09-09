@@ -1,6 +1,6 @@
 # @phantom/web-mux
 
-the browser-side muxing half of the app, pulled out of `web/frontend/src/lib` (`mux-core.ts`, `muxer.ts`, `mux.worker.ts`, `mux-codecs.ts`) into something standalone. it's the sibling to [`../extractors`](../extractors/README.md) — extractors resolve a URL into separate video/audio format URLs, this takes those two URLs and combines them into one mp4, entirely in the browser, no server transcode.
+the browser-side muxing half of the app, pulled out of `web/app/src/lib` (`mux-core.ts`, `muxer.ts`, `mux.worker.ts`, `mux-codecs.ts`) into something standalone. it's the sibling to [`../extractors`](../extractors/README.md) — extractors resolve a URL into separate video/audio format URLs, this takes those two URLs and combines them into one mp4, entirely in the browser, no server transcode.
 
 ## What it does
 

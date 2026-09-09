@@ -255,9 +255,14 @@ describe('instagram getInfo (logged-out /api/graphql)', () => {
     expect(info?.title).toBe('Auth Reel');
     expect(info?.formats[0].url).toContain('auth.mp4');
     // authenticated path uses cookieGet (blob-util), skipping throttled
-    // logged-out endpoint & page fetch entirely
+    // logged-out endpoint & page fetch entirely (oembed media-id lookup
+    // carries /p/ inside its query param, so match page fetches by prefix)
     expect(mockCookieGet).toHaveBeenCalled();
     expect(calls.some((href) => href?.includes('/api/graphql'))).toBe(false);
-    expect(calls.some((href) => href?.includes('/p/'))).toBe(false);
+    expect(
+      calls.some((href) =>
+        href?.startsWith('https://www.instagram.com/p/')
+      )
+    ).toBe(false);
   });
 });

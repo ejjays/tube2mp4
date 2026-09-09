@@ -1,0 +1,174 @@
+name: App E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_url:
+        description: Single URL to test (empty = full matrix)
+        required: false
+        default: ''
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/app/**'
+      - 'web/api/**'
+      - 'web/shared/**'
+      - 'packages/**'
+      - '.github/workflows/app-e2e.yml'
+  schedule:
+    - cron: '30 4 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 24
+
+jobs:
+  app-e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install yt-dlp
+        run: pip3 install --break-system-packages --upgrade yt-dlp
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Setup workspace
+        uses: ./.github/actions/workspace-setup
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          build-extractors: 'true'
+          build-shared: 'true'
+
+      - name: Build api
+        run: |
+          cd web/api
+          npx tsc --noEmit
+          npm run build
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start api
+        working-directory: web/api
+        env:
+          PORT: '5000'
+          REDIS_URL: redis://localhost:6379
+          LIVE_PROXY: ${{ secrets.LIVE_PROXY }}
+          IG_COOKIE: ${{ secrets.EXPO_PUBLIC_IG_COOKIE }}
+          EXPO_PUBLIC_IG_COOKIE: ${{ secrets.EXPO_PUBLIC_IG_COOKIE }}
+          YT_COOKIE: ${{ secrets.YT_COOKIE }}
+          BILIBILI_COOKIE: ${{ secrets.BILIBILI_COOKIE }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        run: |
+          node dist/api/src/app.js > /tmp/api.log 2>&1 &
+          API_PID=$!
+          echo "API_PID=$API_PID" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5000/ping >/dev/null 2>&1; then echo "api ready"; break; fi
+            sleep 2
+            if ! kill -0 $API_PID 2>/dev/null; then echo "api died"; cat /tmp/api.log; exit 1; fi
+          done
+
+      - name: Start app dev server
+        working-directory: web/app
+        env:
+          VITE_API_URL: http://localhost:5000
+        run: |
+          npm run dev &
+          APP_PID=$!
+          echo "APP_PID=$APP_PID" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5173/app/ >/dev/null 2>&1; then echo "app ready"; break; fi
+            sleep 2
+          done
+
+      - name: Run Playwright E2E
+        working-directory: web/app
+        env:
+          CI: '1'
+        run: |
+          echo "--- api health check ---"
+          curl -fsS --max-time 5 http://127.0.0.1:5000/ping
+          echo ""
+          echo "--- running playwright ---"
+          npx playwright test --reporter=list,junit
+          echo "--- api log tail ---"
+          tail -50 /tmp/api.log || true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            web/app/playwright-report/
+            web/app/test-results.xml
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Stop services
+        if: always()
+        run: |
+          echo "--- api log ---"
+          tail -100 /tmp/api.log || true
+          kill $APP_PID || true
+          kill $API_PID || true
+
+  telegram-notify:
+    name: Telegram notify
+    needs: [app-e2e]
+    if: ${{ always() && needs.app-e2e.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: playwright-report
+          path: report
+
+      - name: Send Telegram message
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ] || { echo "telegram secrets not set, skipping"; exit 0; }
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          SUMMARY=""
+          if [ -f report/test-results.xml ]; then
+            FAILS=$(grep -c 'failure' report/test-results.xml 2>/dev/null || true)
+            TESTS=$(grep -c 'testcase' report/test-results.xml 2>/dev/null || true)
+            SUMMARY="tests: ${TESTS}, failures: ${FAILS}"
+          fi
+          TEXT="phantom app e2e FAILED"$'\n\n'"${SUMMARY}"$'\n'"${RUN_URL}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="${TG_CHAT}" \
+            --data-urlencode "text=${TEXT}"

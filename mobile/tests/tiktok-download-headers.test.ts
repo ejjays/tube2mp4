@@ -5,7 +5,11 @@ vi.mock('../src/lib/net', () => ({
 }));
 
 import { gatedFetch } from '../src/lib/net';
-import { getInfo } from '../src/extractors/tiktok';
+import { createTikTokExtractor } from '@phantom/extractors';
+import { mobileSharedEnv } from '../src/extractors/shared/env';
+
+const getInfo = (url: string) =>
+  createTikTokExtractor(mobileSharedEnv).getInfo(url);
 
 const mockFetch = vi.mocked(gatedFetch);
 
@@ -65,17 +69,13 @@ describe('tiktok getInfo downloadHeaders', () => {
   });
 
   it('signs the cdn download with UA, referer and cookie', async () => {
-    mockFetch
-      .mockResolvedValueOnce(
-        fakeResponse({ setCookie: 'ttwid=primed123; Path=/' })
-      )
-      .mockResolvedValueOnce(
-        fakeResponse({
-          setCookie: 'tt_csrf_token=tok456; Path=/',
-          text: html,
-          url: 'https://www.tiktok.com/@creator/video/7123',
-        })
-      );
+    mockFetch.mockResolvedValueOnce(
+      fakeResponse({
+        setCookie: 'ttwid=page123; Path=/',
+        text: html,
+        url: 'https://www.tiktok.com/@creator/video/7123',
+      })
+    );
 
     const info = await getInfo('https://vt.tiktok.com/ZSC2N49FD/');
 
@@ -83,6 +83,6 @@ describe('tiktok getInfo downloadHeaders', () => {
     const headers: Record<string, string> = info?.downloadHeaders ?? {};
     expect(headers['User-Agent']).toContain('Mozilla/5.0');
     expect(headers.Referer).toBe('https://www.tiktok.com/');
-    expect(headers.Cookie).toContain('ttwid=primed123');
+    expect(headers.Cookie).toContain('ttwid=page123');
   });
 });
