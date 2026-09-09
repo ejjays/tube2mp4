@@ -10,9 +10,9 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/*.mjs"],
-      // scripts read typescript7's package.json via require.resolve to find
-      // its bin path; not a real dependency edge
-      "ignoreUnresolved": ["typescript7/package.json"],
+      // scripts require.resolve('typescript7/package.json') to locate its
+      // bin (ts7's exports map hides bin/); not a real dependency edge
+      "ignoreDependencies": ["typescript7/package.json"],
     },
     "packages/extractors": {},
     "packages/web-mux": {},
@@ -37,7 +37,6 @@
         // test-only: knip's vitest plugin is off, so these look unused
         "@testing-library/dom",
         "@testing-library/react",
-        "@types/styled-components",
         "@vitejs/plugin-react",
         "vite-plugin-sitemap",
       ],
