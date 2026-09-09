@@ -23,13 +23,13 @@
     "install:web": "bash scripts/setup/install-web.sh",
     "build:ui": "cd web/app && npm install && npm run build",
     "build:api": "cd web/api && npm install && npm run build",
-    "lint": "echo 'linting changed (api)...' && (cd web/api && npm run lint) && echo 'linting changed (app)...' && (cd web/app && npm run lint) && echo 'linting mobile...' && (cd mobile && npm run lint) && echo '✅ lint passed (changed files)'",
-    "lint:all": "echo 'linting api...' && (cd web/api && npm run lint:all) && echo 'linting app...' && (cd web/app && npm run lint:all) && echo 'linting mobile...' && (cd mobile && npm run lint:all) && echo '✅ lint passed (all files)'",
+    "lint": "echo 'linting changed (api)...' && (cd web/api && npm run lint) && echo 'linting changed (app)...' && (cd web/app && npm run lint) && echo 'linting mobile...' && (cd mobile && npm run lint) && echo '\u2705 lint passed (changed files)'",
+    "lint:all": "echo 'linting api...' && (cd web/api && npm run lint:all) && echo 'linting app...' && (cd web/app && npm run lint:all) && echo 'linting mobile...' && (cd mobile && npm run lint:all) && echo '\u2705 lint passed (all files)'",
     "format:all": "prettier --write .",
     "format": "pretty-quick",
     "typecheck": "node scripts/typecheck.mjs",
-    "check": "npm run typecheck && npm run lint && echo '✅ all passed (changed lint)'",
-    "check:all": "npm run typecheck && npm run lint:all && echo '✅ all passed (full lint)'",
+    "check": "npm run typecheck && npm run lint && echo '\u2705 all passed (changed lint)'",
+    "check:all": "npm run typecheck && npm run lint:all && echo '\u2705 all passed (full lint)'",
     "prepare": "husky || true",
     "postinstall": "node scripts/fix-ts7-android.mjs && node node_modules/patch-package/dist/index.js"
   },
@@ -37,9 +37,10 @@
     "husky": "^9.1.7",
     "knip": "^6.32.2",
     "lint-staged": "^17.3.0",
+    "patch-package": "^8.0.1",
     "prettier": "^3.9.6",
     "pretty-quick": "^4.2.2",
-    "patch-package": "^8.0.1"
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "overrides": {
     "libsql": "npm:empty-npm-package@1.0.0",

@@ -10,10 +10,6 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/*.mjs"],
-      // scripts/*.mjs require.resolve('typescript7/package.json') to find its
-      // bin (ts7's exports map hides bin/). Not a real dependency edge, and
-      // it's an "unlisted" finding, which has no dedicated ignore key.
-      "ignoreIssues": { "scripts/**": ["unlisted"] },
     },
     "packages/extractors": {},
     "packages/web-mux": {},
