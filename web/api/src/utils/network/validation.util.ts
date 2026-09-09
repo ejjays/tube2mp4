@@ -10,13 +10,15 @@ const LOCAL_PLATFORMS: Record<string, string[]> = {
   spotify: ['spotify.com', 'open.spotify.com'],
 };
 
-function isLocalPlatform(url: string): boolean {
-  let hostname: string;
+function hostnameOf(url: string): string | null {
   try {
-    hostname = new URL(url).hostname.toLowerCase();
+    return new URL(url).hostname.toLowerCase();
   } catch {
-    return false;
+    return null;
   }
+}
+
+function isLocalPlatform(hostname: string): boolean {
   return Object.values(LOCAL_PLATFORMS).some((domains) =>
     domains.some(
       (domain) => hostname === domain || hostname.endsWith(`.${domain}`)
@@ -34,12 +36,10 @@ function isLocalPlatform(url: string): boolean {
  */
 export function isSupportedUrl(url: string | null | undefined): boolean {
   if (!url) return false;
-  try {
-    new URL(url);
-  } catch {
-    return false;
-  }
-  return getRouteName(url) !== null || isLocalPlatform(url);
+  const hostname = hostnameOf(url);
+  // malformed url — getRouteName() would also fail, but bail before parsing twice
+  if (hostname === null) return false;
+  return getRouteName(url) !== null || isLocalPlatform(hostname);
 }
 
 export function isValidSpotifyUrl(url: string | null | undefined): boolean {
